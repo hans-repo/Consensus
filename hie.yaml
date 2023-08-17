@@ -1,0 +1,25 @@
+cradle:
+  cabal:
+    - path: "distributed.hs"
+      component: "Distributed:exe:Distributed"
+      
+    - path: "distributed-haskell/./hotstuff.hs"
+      component: "Distributed:exe:Distributed"
+
+    - path: "distributed-process/src"
+      component: "lib:distributed-process"
+
+    - path: "distributed-process/./benchmarks/Throughput.hs"
+      component: "distributed-process:bench:distributed-process-throughput"
+
+    - path: "distributed-process/./benchmarks/Latency.hs"
+      component: "distributed-process:bench:distributed-process-latency"
+
+    - path: "distributed-process/./benchmarks/Channels.hs"
+      component: "distributed-process:bench:distributed-process-channels"
+
+    - path: "distributed-process/./benchmarks/Spawns.hs"
+      component: "distributed-process:bench:distributed-process-spawns"
+
+    - path: "distributed-process/./benchmarks/ProcessRing.hs"
+      component: "distributed-process:bench:distributed-process-ring"
