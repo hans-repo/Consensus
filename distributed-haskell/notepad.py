@@ -1,2 +1,0 @@
-genesisBlock = Block {content = [], qc = genesisQC, height = 0, blockHash = BlockHash "genesis", parent = []}
-oneBlock = SingleBlock {content = [], qc = genesisQC, height = 0, blockHash = BlockHash "genesis", parent = []}
