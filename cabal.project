@@ -1,1 +1,2 @@
-packages: distributed-process distributed-haskell
+packages: distributed-process hotstuff gradedProposalElection sleepyBlockDAG
+allow-newer: gradedProposalElection
