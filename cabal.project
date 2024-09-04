@@ -1,2 +1,6 @@
 packages: distributed-process hotstuff gradedProposalElection sleepyBlockDAG
 allow-newer: gradedProposalElection
+
+package *
+  --library-profiling: True
+  --executable-profiling: True

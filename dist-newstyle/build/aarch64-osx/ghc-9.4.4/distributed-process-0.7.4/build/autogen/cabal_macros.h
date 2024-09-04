@@ -70,15 +70,15 @@
   (major1) == 1 && (major2) <  4 || \
   (major1) == 1 && (major2) == 4 && (minor) <= 8)
 #endif /* MIN_VERSION_deepseq */
-/* package distributed-static-0.3.9 */
+/* package distributed-static-0.3.10 */
 #ifndef VERSION_distributed_static
-#define VERSION_distributed_static "0.3.9"
+#define VERSION_distributed_static "0.3.10"
 #endif /* VERSION_distributed_static */
 #ifndef MIN_VERSION_distributed_static
 #define MIN_VERSION_distributed_static(major1,major2,minor) (\
   (major1) <  0 || \
   (major1) == 0 && (major2) <  3 || \
-  (major1) == 0 && (major2) == 3 && (minor) <= 9)
+  (major1) == 0 && (major2) == 3 && (minor) <= 10)
 #endif /* MIN_VERSION_distributed_static */
 /* package exceptions-0.10.5 */
 #ifndef VERSION_exceptions
@@ -110,19 +110,19 @@
   (major1) == 2 && (major2) <  2 || \
   (major1) == 2 && (major2) == 2 && (minor) <= 2)
 #endif /* MIN_VERSION_mtl */
-/* package network-transport-0.5.6 */
+/* package network-transport-0.5.7 */
 #ifndef VERSION_network_transport
-#define VERSION_network_transport "0.5.6"
+#define VERSION_network_transport "0.5.7"
 #endif /* VERSION_network_transport */
 #ifndef MIN_VERSION_network_transport
 #define MIN_VERSION_network_transport(major1,major2,minor) (\
   (major1) <  0 || \
   (major1) == 0 && (major2) <  5 || \
-  (major1) == 0 && (major2) == 5 && (minor) <= 6)
+  (major1) == 0 && (major2) == 5 && (minor) <= 7)
 #endif /* MIN_VERSION_network_transport */
-/* package random-1.2.1.1 */
+/* package random-1.2.1.2 */
 #ifndef VERSION_random
-#define VERSION_random "1.2.1.1"
+#define VERSION_random "1.2.1.2"
 #endif /* VERSION_random */
 #ifndef MIN_VERSION_random
 #define MIN_VERSION_random(major1,major2,minor) (\
@@ -191,15 +191,15 @@
   (major1) == 0 && (major2) == 5 && (minor) <= 6)
 #endif /* MIN_VERSION_transformers */
 
-/* tool gcc-16.0.6 */
+/* tool gcc-13.0.0 */
 #ifndef TOOL_VERSION_gcc
-#define TOOL_VERSION_gcc "16.0.6"
+#define TOOL_VERSION_gcc "13.0.0"
 #endif /* TOOL_VERSION_gcc */
 #ifndef MIN_TOOL_VERSION_gcc
 #define MIN_TOOL_VERSION_gcc(major1,major2,minor) (\
-  (major1) <  16 || \
-  (major1) == 16 && (major2) <  0 || \
-  (major1) == 16 && (major2) == 0 && (minor) <= 6)
+  (major1) <  13 || \
+  (major1) == 13 && (major2) <  0 || \
+  (major1) == 13 && (major2) == 0 && (minor) <= 0)
 #endif /* MIN_TOOL_VERSION_gcc */
 /* tool ghc-9.4.4 */
 #ifndef TOOL_VERSION_ghc

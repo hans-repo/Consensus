@@ -50,13 +50,6 @@ optionsParser = Options
      <> help "Number of commands included in a block"
      <> value 10 -- Default value for crashes
      <> showDefault )
-  -- <*> option auto
-  --     ( long "delta"
-  --    <> short 'd'
-  --    <> metavar "DELTA"
-  --    <> help "Synchronous network bound in seconds, also message rate for certain protocols"
-  --    <> value 1 -- Default value for crashes
-  --    <> showDefault )
 
 parseOptions :: IO Options
 parseOptions = execParser opts
