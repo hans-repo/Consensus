@@ -5,11 +5,11 @@ import sys
 import threading
 
 
-nrExperiments = 7
-protocolName = "gradedProposalElection"
+nrExperiments = 10
+protocolName = "gcp"
 nodes = 0  # Number of nodes
-time = 300  # Number of seconds to run the experiment
-batchSize = 32*400 #62500 for 500KB of transactions sized 8B each, Narwhal's batch size
+time = 60  # Number of seconds to run the experiment
+batchSize = 32 #62500 for 500KB of transactions sized 8B each, Narwhal's batch size
 cmdRate = 0  # Number of commands sent per 10^4 millisecond tick to each node
 
 

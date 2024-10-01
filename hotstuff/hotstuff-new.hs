@@ -1,44 +1,52 @@
-{-# LANGUAGE BangPatterns #-}
-import Data.Binary (encode)
-import qualified Data.ByteString.Lazy as BS
+{-# LANGUAGE GeneralizedNewtypeDeriving #-} -- Allows automatic derivation of e.g. Monad
+{-# LANGUAGE DeriveGeneric              #-} -- Allows Generic, for auto-generation of serialization code
+{-# LANGUAGE TemplateHaskell            #-} -- Allows automatic creation of Lenses for ServerState
+import qualified Data.Map as Map
+import Control.Distributed.Process.Node (initRemoteTable, runProcess, newLocalNode)
+import Control.Distributed.Process (Process, ProcessId, kill,
+    send, say, expect, getSelfPid, spawnLocal, match, receiveWait)
+import Network.Transport.TCP (createTransport, defaultTCPAddr, defaultTCPParameters)
+
+import Data.Maybe
+import Data.Binary (Binary) -- Objects have to be binary to send over the network
+import GHC.Generics (Generic) -- For auto-derivation of serialization
+import Data.Typeable (Typeable) -- For safe serialization
+
+import Control.Monad.RWS.Strict (
+    RWS, MonadReader, MonadWriter, MonadState, ask, tell, get, execRWS, liftIO)
+import Control.Monad (replicateM, forever)
+import Control.Concurrent (threadDelay)
+import Control.Lens --(makeLenses, (+=), (%%=), use, view, (.=), (^.))
+import Control.Lens.Getter ( view, Getting )
+
+import System.Random (StdGen, Random, randomR, newStdGen)
+import Data.Foldable (find)
 
 import ParseOptions (Options(..), parseOptions)
-import ConsensusLogic (onPropose, onDecide, onReceiveProposal, execute, randomWithinClient, ask, tell, get)
+import ConsensusLogic
 import ConsensusDataTypes
-import Network.Transport.TCP (createTransport, defaultTCPAddr, defaultTCPParameters)
-import Control.Distributed.Process.Node (initRemoteTable, runProcess, newLocalNode)
-import Control.Monad.RWS.Strict (execRWS, liftIO)
-import qualified Data.Vector as V
-import Data.Maybe (isJust)
-
-
-import Control.Monad (replicateM, forever)
-
-
-import Control.Distributed.Process (kill,
-    send, say, expect, getSelfPid, spawnLocal, match, receiveWait)
-
 
 -- onBeat equivalent
 tickServerHandler :: Tick -> ServerAction ()
 tickServerHandler Tick = do
     ServerConfig myPid peers _ timeout _ <- ask
-    ServerState  _ _ _ _ ticksSinceSendOld _ _ _ _<- get
-    --increment ticks
-    ticksSinceSend += 1
-    serverTickCount += 1
-    let leader = myPid
+    ServerState _ cView _ _ bLeaf _ _ voteList ticksSinceMsgOld _ _ <- get
+    --increment ticks for every peer
+    ticksSinceMsg .= Map.map (+1) ticksSinceMsgOld
+
+    let leader = getLeader peers cView
+        quorum = 2 * div (length peers) 3 + 1
+        votesB = fromMaybe [] (Map.lookup (blockHash bLeaf) voteList)
+        votesT = fromMaybe [] (Map.lookup (TimeoutView (cView-1)) voteList)
     let actionLead
     -- propose if a quorum for the previous block is reached, or a quorum of new view messages, or if it is the first proposal (no previous quorum)
-            | (ticksSinceSendOld > timeout) && (leader == myPid) = onPropose
+            | leader == myPid && (length votesB >= quorum || length votesT >= quorum || bLeaf == genesisBlock) = onPropose
             | otherwise = return ()
     actionLead
-    let actionNextView
-            | (ticksSinceSendOld > timeout) = onDecide
+    let actionNewView 
+            | Map.findWithDefault 0 leader ticksSinceMsgOld > timeout = onNextSyncView
             | otherwise = return ()
-    actionNextView
-
-
+    actionNewView
 
 
 -- Handle all types of messages
@@ -47,14 +55,19 @@ tickServerHandler Tick = do
 msgHandler :: Message -> ServerAction ()
 --receive commands from client
 msgHandler (Message sender recipient (CommandMsg cmd)) = do
-    ServerState _ _ _ _ _ mempoolOld _ _ _<- get
+    ServerState _ _ _ _ _ _ _ _ _ mempoolOld _  <- get
     mempool .= cmd:mempoolOld
 --receive proposal, onReceiveProposal
 msgHandler (Message sender recipient (ProposeMsg bNew pView)) = do 
     --handle proposal
     onReceiveProposal bNew pView
-
-
+msgHandler (Message sender recipient (VoteMsg b sign)) = do
+    --handle vote
+    ServerConfig myPid peers _ _ _<- ask
+    onReceiveVote b sign
+msgHandler (Message sender recipient (NewViewMsg qc view sign)) = do
+    --handle new view message
+    onReceiveNewView view qc sign
 
 --Client behavior
 --continuously send commands from client to all servers
@@ -62,34 +75,28 @@ tickClientHandler :: Tick -> ClientAction ()
 tickClientHandler Tick = do
     ServerConfig myPid peers _ _ _ <- ask
     ClientState _ _ lastDeliveredOld lastHeight _ cmdRate tick <- get
+    -- let n = 1
     --sendIndividualCommands cmdRate tick peers
-    --sendNCommands n tick peers
-    --lastDelivered .= []
+    -- sendNCommands n tick peers
+    -- sentCount += n
     tickCount += 1
     if V.length lastDeliveredOld > cmdRate
         then lastDelivered .= V.drop ((V.length lastDeliveredOld) - cmdRate) lastDeliveredOld
         else return ()
 
---Send n commands individually per node
-sendIndividualCommands :: Int -> Int -> [ProcessId] -> ClientAction ()
-sendIndividualCommands _ _ [] = return ()
-sendIndividualCommands n tick peers = do sendNCommands n tick [head peers]
-                                         sendIndividualCommands n tick $ tail peers
+-- sendNCommands :: Int -> Int -> [ProcessId] -> ClientAction ()
+-- sendNCommands 0 _ _ = return ()
+-- sendNCommands n tick peers = do sendSingleCommand peers tick
+--                                 sendNCommands (n-1) tick peers
 
---Send N commands to all nodes
-sendNCommands :: Int -> Int -> [ProcessId] -> ClientAction ()
-sendNCommands 0 _ _ = return ()
-sendNCommands n tick peers = do sendSingleCommand peers tick
-                                sendNCommands (n-1) tick peers
-
-sendSingleCommand :: [ProcessId] -> Int -> ClientAction ()
-sendSingleCommand peers tick = do 
-    let bound1 :: Int
-        bound1 = maxBound
-    command <- randomWithinClient (0, bound1)
-    let commandString = show command
-    broadcastAllClient peers (CommandMsg (Command {cmdId = commandString, deliverTime = tick, proposeTime = tick}))
-    sentCount += 1
+-- sendSingleCommand :: [ProcessId] -> Int -> ClientAction ()
+-- sendSingleCommand peers tick = do 
+--     let bound1 :: Int
+--         bound1 = maxBound
+--     command <- randomWithinClient (0, bound1)
+--     let commandString = show command
+--     broadcastAllClient peers (CommandMsg (Command {cmdId = commandString, sentTime = tick}))
+--     sentCount += 1
 
 msgHandlerCli :: Message -> ClientAction ()
 --record delivered commands
@@ -97,10 +104,10 @@ msgHandlerCli (Message sender recipient (DeliverMsg deliverH deliverCmds)) = do
     ClientState _ _ lastDeliveredOld lastHeight _ _ _<- get
     let action
             -- | lastHeight < deliverH = do rHeight += 1
-            --                              deliveredCount += length deliverCmds
+            --                              deliveredCount += V.length deliverCmds
             --                              lastDelivered .= deliverCmds
             -- | lastHeight == deliverH && lastDeliveredOld /= deliverCmds = do 
-            --                                                                 deliveredCount += length deliverCmds
+            --                                                                 deliveredCount += V.length deliverCmds
             --                                                                 lastDelivered .= deliverCmds
             -- | otherwise = return ()
             | not $ isSubset deliverCmds lastDeliveredOld = do deliveredCount += V.length deliverCmds
@@ -113,20 +120,6 @@ isSubset smaller larger =
     V.all (\x -> isJust $ V.find (== x) larger) smaller
 
 
-
-
-sendSingle :: ProcessId -> ProcessId -> MessageType -> ServerAction ()
-sendSingle myId single content = do
-    tell [Message myId single content]
-
-broadcastAllClient :: [ProcessId] -> MessageType -> ClientAction ()
-broadcastAllClient [single] content = do
-    ServerConfig myId _ _ _ _<- ask
-    tell [Message myId single content]
-broadcastAllClient (single:recipients) content = do
-    ServerConfig myId _ _ _ _<- ask
-    tell [Message myId single content]
-    broadcastAllClient recipients content
 
 
 sendWithDelay :: (Serializable a) => Int -> ProcessId -> a -> Process ()
@@ -150,7 +143,7 @@ spawnServer batchSize= spawnLocal $ do
         liftIO $ threadDelay tickTime
         send myPid Tick
     randomGen <- liftIO newStdGen
-    runServer (ServerConfig myPid otherPids (Signature (show randomGen)) timeoutTicks clientPids) (ServerState 0 0 [genesisBlockSingle] [genesisBlockSingle] 0 [] batchSize randomGen 0)
+    runServer (ServerConfig myPid otherPids (Signature (show randomGen)) timeoutTicks clientPids) (ServerState 0 genesisBlockSingle genesisBlockSingle genesisBlockSingle Map.empty Map.empty Map.empty "propose" 0 batchSize [] randomGen 0)
 
 spawnClient :: Int -> Process ProcessId
 spawnClient cmdRate = spawnLocal $ do
@@ -172,7 +165,7 @@ spawnAll :: Int -> Int -> Int -> Int -> Int -> Process ()
 spawnAll count crashCount clientCount cmdRate batchSize = do
     pids <- replicateM count (spawnServer batchSize)
     
-    clientPids <- replicateM clientCount (spawnClient (batchSize*count))
+    clientPids <- replicateM clientCount (spawnClient cmdRate)
     let allPids = pids ++ clientPids
     mapM_ (`send` pids) allPids
     say $ "sent servers " ++ show pids
@@ -186,22 +179,31 @@ runServer config state = do
     (state', outputMessages) <- receiveWait [
             match $ run msgHandler,
             match $ run tickServerHandler]
-    
+    let !state'' = state'
     let prints -- | False = return () --null outputMessages = return ()
                | null outputMessages = return ()
-               | otherwise = do --say $ "Current state: " ++ show state' ++ "\n"
+               | otherwise = do say $ "Current state: " ++ show state' ++ "\n"
                                 say $ "Sending Messages : "  ++ show outputMessages ++ "\n"
-    --prints
+    -- prints
     let latency = 0*10^5
-    let memoryPrints = do say $ "Length of dagRecent : " ++ show (length $ _dagRecent state' ) ++ "\n"
-                          say $ "Size of dagRecent : " ++ show (getSizeInBytes $ _dagRecent state' ) ++ "\n"
-                          say $ "Size of dagFin : " ++ show (getSizeInBytes $ _dagFin state' ) ++ "\n"
-                        --   say $ "Size of mempool : " ++ show (getSizeInBytes $ _mempool state' ) ++ "\n"
-                        --   say $ "Length of mempool : " ++ show (length $ _mempool state' ) ++ "\n"
+    let memoryPrints = do --say $ "Length of bRecent : " ++ show (length $ _bRecent state' ) ++ "\n"
+                        --   say $ "Size of bRecent : " ++ show (getSizeInBytes $ _bRecent state' ) ++ "\n"
+                          say $ show (getSizeInBytes $ outputMessages) ++ "\n"
+                          --say $ "Size of mempool : " ++ show (getSizeInBytes $ _mempool state' ) ++ "\n"
+                          --say $ "Length of mempool : " ++ show (length $ _mempool state' ) ++ "\n"
+                          
     --memoryPrints
     mapM (\msg -> sendWithDelay latency (recipientOf msg) msg) outputMessages
-    let !state'' = state'
+
     runServer config state''
+
+getSizeInBytes :: Binary a => a -> Int
+getSizeInBytes = fromIntegral . BS.length . encode
+
+-- Function to take the last x elements from a vector
+lastXElements :: Int -> V.Vector a -> V.Vector a
+lastXElements x vec = V.take x (V.drop (V.length vec - x) vec)
+
 
 meanTickDifference :: V.Vector Command -> Int -> Double
 meanTickDifference commands tick =
@@ -210,12 +212,6 @@ meanTickDifference commands tick =
         total = sum differences
         count = length differences
     in if count == 0 then 0 else total / fromIntegral count
-
-
--- Function to take the last x elements from a vector
-lastXElements :: Int -> V.Vector a -> V.Vector a
-lastXElements x vec = V.take x (V.drop (V.length vec - x) vec)
-
 
 runClient :: ServerConfig -> ClientState -> Process ()
 runClient config state = do
@@ -226,8 +222,8 @@ runClient config state = do
     let throughput = fromIntegral (_deliveredCount state') / fromIntegral (_tickCount state') 
         meanLatency = meanTickDifference (lastXElements (_msgRate state') (_lastDelivered state')) (_tickCount state')
     let throughputPrint 
-            -- | (_lastDelivered state') /= (_lastDelivered state) = say $ "Current throughput: " ++ show throughput ++ "\n" ++ "deliveredCount: " ++ show (_deliveredCount state') ++ "\n" ++ "tickCount: " ++ show (_tickCount state') ++ "\n" ++ "lastDelivered: " ++ show (V.toList $ _lastDelivered state') ++ "\n"
-            | ((_lastDelivered state') /= (_lastDelivered state)) && ((_lastDelivered state') /= V.empty) = say $ "Delivered commands " ++ show (_deliveredCount state') ++ "\n" 
+            -- | ((_lastDelivered state') /= (_lastDelivered state)) && ((_lastDelivered state') /= V.empty) = say $ "Current throughput: " ++ show throughput ++ "\n" ++ "deliveredCount: " ++ show (_deliveredCount state') ++ "\n" ++ "tickCount: " ++ show (_tickCount state') ++ "\n" ++ "lastDelivered: " ++ show (V.toList $ _lastDelivered state') ++ "\n"
+            | ((_lastDelivered state') /= (_lastDelivered state)) && ((_lastDelivered state') /= V.empty)= say $ "Delivered commands " ++ show (_deliveredCount state')
             | otherwise = return ()
     let latencyPrint 
             | ((_lastDelivered state') /= (_lastDelivered state)) && ((_lastDelivered state') /= V.empty) = say $ "Current mean latency: " ++ show meanLatency ++ "\n"
@@ -239,17 +235,11 @@ runClient config state = do
     latencyPrint
     --prints
     --say $ "Sending Messages : " ++ show outputMessages++ "\n"
-    --say $ "Size of lastDelivered : " ++ show (getSizeInBytes (V.toList $ _lastDelivered state')) ++ "\n"
     mapM (\msg -> send (recipientOf msg) msg) outputMessages
     let !state'' = state'
     runClient config state''
 
-getSizeInBytes :: Binary a => a -> Int
-getSizeInBytes = fromIntegral . BS.length . encode
-
-
 main = do
-    -- get options from command line
     -- cmdRate just serves as an upper limit on lastDelivered for the client, set to the same as batchSize for now.
     Options replicas crashes cmdRate time batchSize <- parseOptions
 

@@ -191,15 +191,15 @@
   (major1) == 0 && (major2) == 5 && (minor) <= 6)
 #endif /* MIN_VERSION_transformers */
 
-/* tool gcc-13.0.0 */
+/* tool gcc-16.0.6 */
 #ifndef TOOL_VERSION_gcc
-#define TOOL_VERSION_gcc "13.0.0"
+#define TOOL_VERSION_gcc "16.0.6"
 #endif /* TOOL_VERSION_gcc */
 #ifndef MIN_TOOL_VERSION_gcc
 #define MIN_TOOL_VERSION_gcc(major1,major2,minor) (\
-  (major1) <  13 || \
-  (major1) == 13 && (major2) <  0 || \
-  (major1) == 13 && (major2) == 0 && (minor) <= 0)
+  (major1) <  16 || \
+  (major1) == 16 && (major2) <  0 || \
+  (major1) == 16 && (major2) == 0 && (minor) <= 6)
 #endif /* MIN_TOOL_VERSION_gcc */
 /* tool ghc-9.4.4 */
 #ifndef TOOL_VERSION_ghc

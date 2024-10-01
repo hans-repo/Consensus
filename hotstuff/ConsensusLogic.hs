@@ -1,0 +1,182 @@
+{-# LANGUAGE BangPatterns #-}
+
+
+module ConsensusLogic (
+    onReceiveProposal, onReceiveEcho, onReceiveVote, getLeader, onPropose, randomWithin, randomWithinClient, findBlock, singleToFull, appendIfNotExists, onNextSyncView, ask, tell, get
+) where
+
+import ConsensusDataTypes
+import qualified Data.Map.Strict as Map
+import qualified Data.Vector as V
+import Data.List (union)
+import Control.Monad.RWS.Strict (ask, tell, get, execRWS, liftIO)
+
+
+randomWithinClient :: Random r => (r,r) -> ClientAction r
+randomWithinClient bounds = randomGenCli %%= randomR bounds
+
+randomWithin :: Random r => (r,r) -> ServerAction r
+randomWithin bounds = randomGen %%= randomR bounds
+
+
+
+
+findBlock :: BlockHash -> [SingleBlock] -> SingleBlock 
+findBlock h [b,_] = findBlockDepth h b
+findBlock h (b:bs) | h == blockHashS b = b 
+                   | otherwise = findBlock h bs 
+                
+findBlockDepth :: BlockHash -> SingleBlock -> SingleBlock
+findBlockDepth h b | h == blockHashS b = b 
+                   | b == genesisBlockSingle = genesisBlockSingle
+                   | otherwise = findBlockDepth h (head $ parent b)
+
+singleToFull :: SingleBlock -> [Block] -> Block
+singleToFull sb bRecent = let parentBlock = findBlock (parentS sb) bRecent
+                   in Block {content = contentS sb, qc = qcS sb, height = heightS sb, blockHash = blockHashS sb, parent = [parentBlock]}
+
+appendIfNotExists :: Eq a => a -> [a] -> [a]
+appendIfNotExists x xs
+  | x `elem` xs = xs  -- Element already exists, return the original list
+  | otherwise   = x : xs  -- Append the element to the list
+
+broadcastAllClient :: [ProcessId] -> MessageType -> ClientAction ()
+broadcastAllClient [single] content = do
+    ServerConfig myId _ _ _ _<- ask
+    tell [Message myId single content]
+broadcastAllClient (single:recipients) content = do
+    ServerConfig myId _ _ _ _<- ask
+    tell [Message myId single content]
+    broadcastAllClient recipients content
+
+
+sendSingle :: ProcessId -> ProcessId -> MessageType -> ServerAction ()
+sendSingle myId single content = do
+    tell [Message myId single content]
+
+
+-- Event driven Hotstuff
+onPropose :: ServerAction ()
+onPropose = do
+    ServerConfig myPid peers _ _ _ <- ask
+    -- dummy random hash 
+    let bound1 :: Int
+        bound1 = maxBound
+    hash <- randomWithin (0, bound1)
+    ServerState _ cView bLock _ bLeafOld bRecentOld qcHigh _ _ batchSize mempool _ <- get
+    mempoolBlock <- createBatch serverTickCount batchSize
+    let singleBlock = SingleBlock {contentS = mempool, qcS = qcHigh, heightS = cView + 1, blockHashS = BlockHash (show hash), parentS = blockHashS bLeafOld}
+    bLeaf .= singleBlock
+    bRecent .= appendIfNotExists singleBlock bRecentOld
+    broadcastAll peers (ProposeMsg {proposal = singleBlock, pView = cView})
+
+createBatch :: Int -> Int -> ServerAction (V.Vector Command)
+createBatch serverTickCount size = do
+    let go i !acc | i >= size = return acc
+                    | otherwise = do
+                        commandInt <- randomWithin (0, maxBound :: Int)
+                        let commandString = show commandInt
+                            newCmd = Command {cmdId = commandString, deliverTime = 0, proposeTime = serverTickCount}
+                        go (i + 1) $! (acc `V.snoc` newCmd)
+    go 0 V.empty
+
+
+onReceiveProposal :: SingleBlock -> Int -> ServerAction ()
+onReceiveProposal bNew pView = do 
+    ServerState vHeightOld cViewOld bLock _ _ bRecentOld _ _ _ _ mempoolOld _ <- get
+    ServerConfig myPid peers staticSignature _ _<- ask
+    let action | (heightS bNew > vHeightOld) && ( hash (qcS bNew) == blockHashS bLock || heightS bNew > heightS bLock) = do
+                                -- next view, reset timers for all peers
+                                cView += 1
+                                ticksSinceMsg .= Map.fromList [(key, 0) | key <- peers]
+                                vHeight .= heightS bNew
+                                sendSingle myPid (getLeader peers (1+ cViewOld)) (VoteMsg {votedBlock = blockHashS bNew, sign = staticSignature})
+               | otherwise = return ()
+    action
+    bRecent .= appendIfNotExists bNew bRecentOld
+    updateChain bNew
+    -- mempool .= filter (`notElem` contentS bNew) mempoolOld
+
+
+onReceiveVote :: BlockHash -> Signature -> ServerAction ()
+onReceiveVote bNewHash sign = do 
+    ServerState _ _ _ _ _ bRecent _ voteListOld _ _ _ _ <- get
+    let bNew = findBlock bNewHash bRecent
+        votesB = fromMaybe [] (Map.lookup (blockHashS bNew) voteListOld)
+    let actionAddToList | sign `elem` votesB = return ()
+                        | otherwise = do voteList .= Map.insertWith (++) (blockHashS bNew) [sign] voteListOld                              
+    actionAddToList
+    -- get state again for the new voteList
+    ServerState _ _ _ _ _ _ _ voteListNew ticksSinceMsg _ _ <- get
+    let votesBNew = fromMaybe [] (Map.lookup (blockHashS bNew) voteListNew)
+        quorum = 2 * div (Map.size ticksSinceMsg) 3 + 1
+    let action  | length votesBNew >= quorum = do updateQCHigh $ QC {signatures = votesBNew, hash = blockHash bNew}
+                | otherwise = return ()
+    action
+
+onCommit :: SingleBlock -> SingleBlock -> ServerAction ()
+onCommit bExec b = do 
+    let action | heightS bExec < heightS b = do -- onCommit bExec (head (parentS b))
+                                                execute (heightS bExec) (V.toList (contentS b))
+               | otherwise = return ()
+    action
+
+ -- confirm delivery to all clients and servers
+execute :: Int -> [Command] -> ServerAction ()
+execute height cmds = do 
+    ServerConfig _ _ _ _ clients<- ask
+    ServerState _ _ _ _ _ _ _ _ _ _ mempoolOld _ <- get
+    mempool .= filter (`notElem` cmds) mempoolOld
+    broadcastAll clients (DeliverMsg {deliverCommands = cmds, deliverHeight = height})
+    
+
+--Need to input the latest block so that findBlock doesn't search from bLeaf which isn't updated yet
+updateQCHigh :: QC -> ServerAction ()
+updateQCHigh qc = do
+    ServerState _ _ _ _ _ bRecent qcHighOld _ _ _ _ _ <- get
+    let qcNode = findBlock (hash qc) bRecent
+        qcNodeOld = findBlock (hash qcHighOld) bRecent
+        action  | height qcNode > height qcNodeOld = do qcHigh .= qc
+                                                        bLeaf .= qcNode
+                | otherwise = return ()
+    action
+
+updateChain :: SingleBlock -> ServerAction ()
+updateChain bStar = do 
+    ServerState _ _ bLockOld bExecOld _ bRecent qcHigh _ _ _ _ _ <- get
+    updateQCHigh $ qcS bStar
+    let b'' = findBlock (hash $ qcS bStar) bRecent
+        b'  = findBlockDepth (hash $ qcS b'') b''
+        b   = findBlockDepth (hash $ qcS b') b'
+        actionL | heightS b' > heightS bLockOld = do bLock .= b'
+                | otherwise = return ()
+        actionC | (parentS b'' == [b']) && (parentS b' == [b]) = do onCommit bExecOld b 
+                                                                    bExec .= b
+                | otherwise = return ()
+    actionL 
+    actionC 
+
+
+-- Pacemaker from paper
+getLeader :: [ProcessId] -> Int -> ProcessId
+getLeader list v = list !! mod v (length list)
+
+onNextSyncView :: ServerAction ()
+onNextSyncView = do 
+    ServerState _ cViewOld _ _ _ _ qcHigh _ _ _ _ _ <- get
+    ServerConfig myPid peers staticSignature _ _<- ask
+    -- next view, reset timers for all peers
+    cView += 1
+    ticksSinceMsg .= Map.fromList [(key, 0) | key <- peers]
+    sendSingle myPid (getLeader peers (1+ cViewOld)) (NewViewMsg {newViewQC= qcHigh, newViewId = cViewOld, newViewSign = staticSignature}) 
+
+onReceiveNewView :: Int -> QC -> Signature -> ServerAction ()
+onReceiveNewView view qc sign = do 
+    ServerState _ _ _ _ _ _ _ voteListOld ticksSinceMsg _ _ _ <- get
+    let quorum = 2 * div (Map.size ticksSinceMsg) 3 + 1 
+        votes = voteListOld
+        votesT = fromMaybe [] (Map.lookup (TimeoutView view) votes)
+    let actionAddToList | sign `elem` votesT = return ()
+                        | otherwise = do voteList .= Map.insertWith (++) (TimeoutView view) [sign] voteListOld
+    actionAddToList
+    updateQCHigh qc
