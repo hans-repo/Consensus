@@ -125,7 +125,7 @@ def parse_latency2(filename):
     
 #     return ratios
 
-pathToResults = "hotstuff/10experiments/"
+pathToResults = "gcp/results/nodes5-100_time60_crashesThird"
 # pathToResults = ""
 
 latencyResults = []

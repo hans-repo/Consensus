@@ -5,7 +5,7 @@ import os
 from matplotlib.ticker import FuncFormatter
 from datetime import datetime
 
-pathToResults = "gradedProposalElection/1secrate_nodes5-100_batch32_time120/"
+pathToResults = "sleepyBlockDAG/1secrate_nodes5-75_batch32_time600/"
 # pathToResults = ""
 
 def calculate_stats(data):

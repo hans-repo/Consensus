@@ -1,4 +1,4 @@
-packages: gcp distributed-process hotstuff gradedProposalElection sleepyBlockDAG
+packages: gcp hotstuff gradedProposalElection sleepyBlockDAG
 allow-newer: gradedProposalElection
 
 package *
