@@ -141,7 +141,7 @@ data ClientState = ClientState {
     _lastDelivered :: !(V.Vector Command), --last batch of delivered commands
     _rHeight :: !Int, --height of last received confirmed block
     _randomGenCli :: !StdGen, --last random number generation
-    _msgRate :: !Int, --number of commands sent to each node per tick
+    _clientBatchSize :: !Int, ----size of delivered batches, same as server batchSize
     _tickCount :: !Int --tick counter
 } deriving (Show, Eq)
 makeLenses ''ClientState

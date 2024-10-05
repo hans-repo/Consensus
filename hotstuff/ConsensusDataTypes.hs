@@ -155,7 +155,7 @@ data ClientState = ClientState {
     _lastDelivered :: !(V.Vector Command), --last batch of delivered commands
     _rHeight :: !Int, --height of last received confirmed block
     _randomGenCli :: !StdGen, --last random number generation
-    _msgRate :: !Int, --number of commands sent to each node per tick
+    _clientBatchSize :: !Int, --size of delivered batches, same as server batchSize
     _tickCount :: !Int --tick counter
 } deriving (Show, Eq)
 makeLenses ''ClientState
@@ -172,7 +172,7 @@ data ServerState = ServerState {
     _voteList :: !(Map.Map BlockHash [Signature]), --list of received votes
     _ticksSinceMsg :: !(Map.Map ProcessId Int), --time ticks since receiving a message, used as timer
     _batchSize :: !Int, --number of commands per block
-    _mempool :: ![Command], --list of unconfirmed commands
+    _serverTickCount :: !Int, --tick count since start
     _randomGen :: !StdGen --last random number generation
 } deriving (Show)
 makeLenses ''ServerState

@@ -39,7 +39,10 @@ import Data.Foldable (find)
 import Control.Lens --(makeLenses, (+=), (%%=), use, view, (.=), (^.))
 
 --commands sent by clients
-data Command = Command {cmdId :: String, deliverTime :: Int, proposeTime :: Int}
+-- data Command = Command {cmdId :: String, deliverTime :: Int, proposeTime :: Int}
+--     deriving (Show, Generic, Typeable, Eq)
+
+data DagInput = DagInput {dag :: [String], proposeTime :: Int }
     deriving (Show, Generic, Typeable, Eq)
 
 --hash of a block
@@ -50,24 +53,24 @@ data BlockHash = BlockHash String
 data Signature = Signature String
     deriving (Show, Generic, Typeable, Eq)
 
---block datatype, contains list of commands, justifying quorum certificate qc, height, block hash, and parent block.
---Note that it references the entire blockchain through the parent block link
-data Block = Block {content :: [Command], height :: Int, blockHash :: BlockHash, parent :: [Block]}
-    deriving (Show, Generic, Typeable, Eq)
+-- --block datatype, contains list of commands, justifying quorum certificate qc, height, block hash, and parent block.
+-- --Note that it references the entire blockchain through the parent block link
+-- data Block = Block {content :: [Command], height :: Int, blockHash :: BlockHash, parent :: [Block]}
+--     deriving (Show, Generic, Typeable, Eq)
 
-genesisBlock :: Block 
-genesisBlock = Block {content = [], height = 0, blockHash = BlockHash "genesis", parent = []}
+-- genesisBlock :: Block 
+-- genesisBlock = Block {content = [], height = 0, blockHash = BlockHash "genesis", parent = []}
 
---block datatype linking to the hash of the parent instead of the entire blockchain as in Block.
-data SingleBlock = SingleBlock {contentS :: V.Vector Command, heightS :: Int, blockHashS :: BlockHash, parentS :: [BlockHash]}
-    deriving (Show, Generic, Typeable, Eq)
+-- --block datatype linking to the hash of the parent instead of the entire blockchain as in Block.
+-- data SingleBlock = SingleBlock {contentS :: V.Vector Command, heightS :: Int, blockHashS :: BlockHash, parentS :: [BlockHash]}
+--     deriving (Show, Generic, Typeable, Eq)
 
-genesisBlockSingle :: SingleBlock
-genesisBlockSingle = SingleBlock {contentS = V.fromList [], heightS = 0, blockHashS = BlockHash "genesis", parentS = []}
+-- genesisBlockSingle :: SingleBlock
+-- genesisBlockSingle = SingleBlock {contentS = V.fromList [], heightS = 0, blockHashS = BlockHash "genesis", parentS = []}
 
 
 --message types between nodes. CommandMsg for client commands, DeliverCmd to share confirmed commands and the block height. VoteMsg for votes in chained hotstuff. ProposeMsg for leader proposals. NewViewMsg is the new view sent by replicas upon timeout.
-data MessageType = CommandMsg Command | DeliverMsg {tickLatency :: Int, deliverCommands :: [String]} | ProposeMsg {proposal :: [String]} | VoteMsg {vote :: [String], proposes :: [[String]]}
+data MessageType = DeliverMsg {tickLatency :: Int, deliverCommands :: DagInput} | ProposeMsg {proposal :: DagInput} | VoteMsg {vote :: DagInput, proposes :: [DagInput]}
     deriving (Show, Generic, Typeable, Eq)
 
 --generic message for networking between processes.
@@ -76,9 +79,10 @@ data Message = Message {senderOf :: ProcessId, recipientOf :: ProcessId, msg :: 
 
 data Tick = Tick deriving (Show, Generic, Typeable, Eq)
 
+instance Binary DagInput
 instance Binary Signature
 instance Binary BlockHash
-instance Binary Command
+-- instance Binary Command
 instance Binary MessageType
 instance Binary Message
 instance Binary Tick
@@ -86,19 +90,18 @@ instance Binary Tick
 data ClientState = ClientState {
     _sentCount ::  Int, --number of sent commands
     _deliveredCount ::  Int, --number of delivered commands
-    _lastDelivered ::  (V.Vector [String]), --last batch of delivered commands
+    _lastDelivered ::  (V.Vector DagInput), --last batch of delivered commands
     _rHeight :: Int, --height of last received confirmed block
     _randomGenCli :: StdGen, --last random number generation
-    _msgRate :: Int, --number of commands sent to each node per tick
-    _tickCount :: Int, --tick counter since decision received
-    _latencyTracker :: Int --tick for last delivery
+    _clientBatchSize :: Int, --size of delivered batches, same as server batchSize
+    _tickCount :: Int --tick counter since decision received
 } deriving (Show, Eq)
 makeLenses ''ClientState
 
 data ServerState = ServerState {
     _phase :: String,
-    _proposeList :: [[String]], --list of received proposals
-    _voteList :: [[String]], --list of received votes
+    _proposeList :: [DagInput], --list of received proposals
+    _voteList :: [DagInput], --list of received votes
     _randomGen :: StdGen, --last random number generation
     _serverTickCount :: Int --tick counter
 } deriving (Show)

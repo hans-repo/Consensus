@@ -168,8 +168,8 @@ spawnClient cmdRate = spawnLocal $ do
     runClient (ServerConfig myPid otherPids (Signature (show randomGen)) timeoutTicks clientPids) (ClientState 0 0 (V.fromList []) 0 randomGen cmdRate 0)
 
 
-spawnAll :: Int -> Int -> Int -> Int -> Int -> Process ()
-spawnAll count crashCount clientCount cmdRate batchSize = do
+spawnAll :: Int -> Int -> Int -> Int -> Process ()
+spawnAll count crashCount clientCount batchSize = do
     pids <- replicateM count (spawnServer batchSize)
     
     clientPids <- replicateM clientCount (spawnClient (batchSize*count))
@@ -224,7 +224,7 @@ runClient config state = do
             match $ run msgHandlerCli,
             match $ run tickClientHandler]
     let throughput = fromIntegral (_deliveredCount state') / fromIntegral (_tickCount state') 
-        meanLatency = meanTickDifference (lastXElements (_msgRate state') (_lastDelivered state')) (_tickCount state')
+        meanLatency = meanTickDifference (lastXElements (_clientBatchSize state') (_lastDelivered state')) (_tickCount state')
     let throughputPrint 
             -- | (_lastDelivered state') /= (_lastDelivered state) = say $ "Current throughput: " ++ show throughput ++ "\n" ++ "deliveredCount: " ++ show (_deliveredCount state') ++ "\n" ++ "tickCount: " ++ show (_tickCount state') ++ "\n" ++ "lastDelivered: " ++ show (V.toList $ _lastDelivered state') ++ "\n"
             | ((_lastDelivered state') /= (_lastDelivered state)) && ((_lastDelivered state') /= V.empty) = say $ "Delivered commands " ++ show (_deliveredCount state') ++ "\n" 
@@ -251,11 +251,11 @@ getSizeInBytes = fromIntegral . BS.length . encode
 main = do
     -- get options from command line
     -- cmdRate just serves as an upper limit on lastDelivered for the client, set to the same as batchSize for now.
-    Options replicas crashes cmdRate time batchSize <- parseOptions
+    Options replicas crashes time batchSize <- parseOptions
 
     Right transport <- createTransport (defaultTCPAddr "localhost" "0") defaultTCPParameters
     backendNode <- newLocalNode transport initRemoteTable
-    runProcess backendNode (spawnAll replicas crashes 1 batchSize batchSize) -- number of replicas, number of crashes, number of clients
+    runProcess backendNode (spawnAll replicas crashes 1 batchSize) -- number of replicas, number of crashes, number of clients
     putStrLn $ "Running for " ++ show time ++ " seconds before exiting..."
     threadDelay (time*1000000)  -- seconds in microseconds
     putStrLn "Exiting now."

@@ -21,92 +21,13 @@ import Control.Lens.Getter ( view, Getting )
 
 import System.Random (StdGen, Random, randomR, newStdGen)
 
-import Data.Foldable (find)
-import Data.List (intersect, nub)
+
 import qualified Data.Vector as V
 
 import ParseOptions (Options(..), parseOptions)
--- import ConsensusLogic
+import ConsensusLogic
 import ConsensusDataTypes
 
-appendIfNotExists :: Eq a => a -> [a] -> [a]
-appendIfNotExists x xs
-  | x `elem` xs = xs  -- Element already exists, return the original list
-  | otherwise   = x : xs  -- Append the element to the list
-
-broadcastAll :: [ProcessId] -> MessageType -> ServerAction ()
-broadcastAll [single] content = do
-    ServerConfig myId _ _ _ _<- ask
-    tell [Message myId single content]
-broadcastAll (single:recipients) content = do
-    ServerConfig myId _ _ _ _<- ask
-    tell [Message myId single content]
-    broadcastAll recipients content
-
--- Helper function to remove an element at a specific index
-removeAt :: Int -> [a] -> (a, [a])
-removeAt idx xs = (xs !! idx, take idx xs ++ drop (idx + 1) xs)
-
--- Function to select x random elements without repetition
-selectRandomElements :: Int -> [a] -> ServerAction [a]
-selectRandomElements 0 _ = return []
-selectRandomElements _ [] = return []
-selectRandomElements n xs = do
-  -- Generate a random index within the range of the list
-  randomIdx <- randomWithin (0, length xs - 1)
-  -- Remove the element at the random index from the list
-  let (selectedElem, remainingElems) = removeAt randomIdx xs
-  -- Recursively select the remaining elements
-  rest <- selectRandomElements (n - 1) remainingElems
-  -- Return the selected element along with the rest of the selected elements
-  return (selectedElem : rest)
-
-randomWithin :: Random r => (r,r) -> ServerAction r
-randomWithin bounds = randomGen %%= randomR bounds
-
--- Function to obtain the common subset of a list of lists
-commonSubset :: Eq a => [[a]] -> [a]
-commonSubset [] = []  -- Return an empty list if the input is empty
-commonSubset (x:xs) = foldl1 intersect (x:xs)
-
-
-onPropose :: ServerAction ()
-onPropose = do
-    ServerConfig myPid peers _ _ _ <- ask
-    let myList = map show [1, 2, 3, 4, 5, 6, 7, 8, 9, 10]
-    x <- randomWithin (8, 8)  -- Randomly select between 1 and 5 elements
-    dag <- selectRandomElements x myList
-    broadcastAll peers (ProposeMsg {proposal = dag})
-    phase .= "vote"
-
-onVote :: ServerAction ()
-onVote = do 
-    ServerConfig myPid peers _ _ _ <- ask
-    ServerState _ proposeListOld _ _ _ <- get
-    let voteDag = commonSubset proposeListOld
-    broadcastAll peers (VoteMsg {vote = voteDag, proposes = proposeListOld})
-    proposeList .= []
-    phase .= "decide"
-
-onDecide :: ServerAction ()
-onDecide = do 
-    ServerState _ _ voteListOld _ ticksOld<- get
-    ServerConfig myPid _ _ _ clients <- ask
-    let decideDag = commonSubset voteListOld
-    broadcastAll clients (DeliverMsg {deliverCommands = decideDag, tickLatency = ticksOld})
-    voteList .= []
-    phase .= "propose"
-    -- serverTickCount .= 0
-
-onReceiveProposal :: [String] -> ServerAction ()
-onReceiveProposal dag = do 
-    ServerState _ proposeListOld _ _ _ <- get
-    proposeList .= dag:proposeListOld
-
-onReceiveVote :: [String] -> ServerAction ()
-onReceiveVote dag = do
-    ServerState _ _ voteListOld _ _ <- get
-    voteList .= dag:voteListOld
 
 -- onBeat equivalent
 tickServerHandler :: Tick -> ServerAction ()
@@ -140,7 +61,7 @@ msgHandler (Message sender recipient (VoteMsg dag proposeList)) = do
 tickClientHandler :: Tick -> ClientAction ()
 tickClientHandler Tick = do
     ServerConfig myPid peers _ _ _ <- ask
-    ClientState _ _ lastDeliveredOld lastHeight _ cmdRate tick _ <- get
+    ClientState _ _ lastDeliveredOld lastHeight _ cmdRate tick <- get
     tickCount += 1
     if V.length lastDeliveredOld > 1
         then lastDelivered .= V.drop ((V.length lastDeliveredOld) - cmdRate) lastDeliveredOld
@@ -149,17 +70,12 @@ tickClientHandler Tick = do
 msgHandlerCli :: Message -> ClientAction ()
 --record delivered commands
 msgHandlerCli (Message sender recipient (DeliverMsg deliverTick deliverCmds)) = do
-    ClientState _ _ lastDeliveredOld lastHeight _ _ ticks _<- get
+    ClientState _ _ lastDeliveredOld lastHeight _ _ ticks<- get
     let action
             | not $ isSubset (V.fromList [deliverCmds]) lastDeliveredOld = do deliveredCount += 1
                                                                               lastDelivered .= lastDeliveredOld V.++ (V.fromList [deliverCmds])
-                                                                              latencyTracker .= deliverTick
             | otherwise = return ()
     action
-    -- let resetLatencyTracker
-    --         | ((V.fromList [deliverCmds]) /= lastDeliveredOld) && (lastDeliveredOld /= V.empty) = do latencyTracker .= ticks
-    --         | otherwise = return ()
-    -- resetLatencyTracker
 
 isSubset :: (Eq a) => V.Vector a -> V.Vector a -> Bool
 isSubset smaller larger =
@@ -204,14 +120,14 @@ spawnClient cmdRate = spawnLocal $ do
         liftIO $ threadDelay tickTime
         send myPid Tick
     randomGen <- liftIO newStdGen
-    runClient (ServerConfig myPid otherPids (Signature (show randomGen)) timeoutTicks clientPids) (ClientState 0 0 (V.fromList []) 0 randomGen cmdRate 0 0)
+    runClient (ServerConfig myPid otherPids (Signature (show randomGen)) timeoutTicks clientPids) (ClientState 0 0 (V.fromList []) 0 randomGen cmdRate 0 )
 
 
-spawnAll :: Int -> Int -> Int -> Int -> Int -> Process ()
-spawnAll count crashCount clientCount cmdRate batchSize = do
+spawnAll :: Int -> Int -> Int -> Int -> Process ()
+spawnAll count crashCount clientCount batchSize = do
     pids <- replicateM count (spawnServer batchSize)
     
-    clientPids <- replicateM clientCount (spawnClient cmdRate)
+    clientPids <- replicateM clientCount (spawnClient batchSize)
     let allPids = pids ++ clientPids
     mapM_ (`send` pids) allPids
     say $ "sent servers " ++ show pids
@@ -249,7 +165,13 @@ runServer config state = do
 lastXElements :: Int -> V.Vector a -> V.Vector a
 lastXElements x vec = V.take x (V.drop (V.length vec - x) vec)
 
-
+meanTickDifference :: V.Vector DagInput -> Int -> Double
+meanTickDifference commands tick =
+    let differences = map (\cmd -> fromIntegral (tick - proposeTime cmd)) (V.toList commands)
+    -- let differences = map (\cmd -> fromIntegral (deliverTime cmd - proposeTime cmd)) (V.toList commands)
+        total = sum differences
+        count = length differences
+    in if count == 0 then 0 else total / fromIntegral count
 
 runClient :: ServerConfig -> ClientState -> Process ()
 runClient config state = do
@@ -258,7 +180,7 @@ runClient config state = do
             match $ run msgHandlerCli,
             match $ run tickClientHandler]
     let throughput = fromIntegral (_deliveredCount state') / fromIntegral (_tickCount state') 
-        meanLatency = (_tickCount state') - (_latencyTracker state')
+        meanLatency = meanTickDifference (lastXElements 1 (_lastDelivered state')) (_tickCount state')
     let throughputPrint 
             -- | ((_lastDelivered state') /= (_lastDelivered state)) && ((_lastDelivered state') /= V.empty) = say $ "Current throughput: " ++ show throughput ++ "\n" ++ "deliveredCount: " ++ show (_deliveredCount state') ++ "\n" ++ "tickCount: " ++ show (_tickCount state') ++ "\n" ++ "lastDelivered: " ++ show (V.toList $ _lastDelivered state') ++ "\n"
             | ((_lastDelivered state') /= (_lastDelivered state)) && ((_lastDelivered state') /= V.empty)= say $ "Delivered commands " ++ show (_deliveredCount state')
@@ -278,11 +200,11 @@ runClient config state = do
 
 main = do
     -- cmdRate just serves as an upper limit on lastDelivered for the client, set to the same as batchSize for now.
-    Options replicas crashes cmdRate time batchSize <- parseOptions
+    Options replicas crashes time batchSize <- parseOptions
 
     Right transport <- createTransport (defaultTCPAddr "localhost" "0") defaultTCPParameters
     backendNode <- newLocalNode transport initRemoteTable
-    runProcess backendNode (spawnAll replicas crashes 1 batchSize batchSize) -- number of replicas, number of crashes, number of clients
+    runProcess backendNode (spawnAll replicas crashes 1 batchSize) -- number of replicas, number of crashes, number of clients
     putStrLn $ "Running for " ++ show time ++ " seconds before exiting..."
     threadDelay (time*1000000)  -- seconds in microseconds
     putStrLn "Exiting now."

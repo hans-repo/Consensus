@@ -5,23 +5,22 @@ import sys
 import threading
 
 
-nrExperiments = 10
+nrExperiments = 20
 protocolName = "gcp"
 nodes = 0  # Number of nodes
 time = 60  # Number of seconds to run the experiment
-batchSize = 32 #62500 for 500KB of transactions sized 8B each, Narwhal's batch size
-cmdRate = 0  # Number of commands sent per 10^4 millisecond tick to each node
-
+batchSize = 10 #62500 for 500KB of transactions sized 8B each, Narwhal's batch size
 
 
 for i in range(nrExperiments):
     nodes = nodes + 5
+    crashes = (nodes-1) // 3
     # batchSize = batchSize + 50
     # Command to run the Haskell program using cabal
     command = [
         "cabal", "v2-run", protocolName, "--",
         "--replicas", str(nodes),
-        "--cmdRate", str(cmdRate),
+        "--crashes", str(crashes),
         "--time", str(time),
         "--batchSize", str(batchSize)
     ]

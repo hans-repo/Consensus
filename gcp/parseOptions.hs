@@ -8,7 +8,6 @@ import Options.Applicative
 data Options = Options
   { replicas :: Int
   , crashes  :: Int
-  , cmdRate :: Int
   , time :: Int 
   , batchSize :: Int
   }
@@ -28,13 +27,6 @@ optionsParser = Options
      <> metavar "CRASHES"
      <> help "Number of crashes"
      <> value 0 -- Default value for crashes
-     <> showDefault )
-  <*> option auto
-      ( long "cmdRate"
-     <> short 'm'
-     <> metavar "CMDRATE"
-     <> help "Number of commands sent to each node per client tick"
-     <> value 1 -- Default value for crashes
      <> showDefault )
   <*> option auto
       ( long "time"
