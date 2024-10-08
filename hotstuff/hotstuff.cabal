@@ -15,7 +15,7 @@ cabal-version:       >=1.10
 
 
 
-executable Distributed
+executable Hotstuff
   main-is:             hotstuff.hs
   -- other-modules:       
   other-extensions:    GeneralizedNewtypeDeriving, DeriveGeneric, TemplateHaskell

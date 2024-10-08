@@ -4,8 +4,10 @@
 
 import Control.Distributed.Process.Node (initRemoteTable, runProcess, newLocalNode)
 import Control.Distributed.Process (Process, ProcessId,
-    send, say, expect, getSelfPid, spawnLocal, match, receiveWait)
+    send, say, expect, getSelfPid, spawnLocal, match, receiveWait, NodeId)
+import Control.Distributed.Process.Backend.SimpleLocalnet --(initializeBackend, findPeers, Backend )
 import Network.Transport.TCP (createTransport, defaultTCPAddr, defaultTCPParameters)
+import System.Environment (getArgs)
 
 import Data.Binary (Binary) -- Objects have to be binary to send over the network
 import GHC.Generics (Generic) -- For auto-derivation of serialization
@@ -14,7 +16,7 @@ import Data.Typeable (Typeable) -- For safe serialization
 import Control.Monad.RWS.Strict (
     RWS, MonadReader, MonadWriter, MonadState,
     ask, tell, get, execRWS, liftIO)
-import Control.Monad (replicateM, forever)
+import Control.Monad (replicateM, forever, forM_)
 import Control.Concurrent (threadDelay)
 import Control.Lens (makeLenses, (+=), (%%=))
 
@@ -90,14 +92,39 @@ spawnServer = spawnLocal $ do
     randomGen <- liftIO newStdGen
     runServer (ServerConfig myPid otherPids) (ServerState 0 0 randomGen)
 
-spawnServers :: Int -> Process ()
-spawnServers count = do
-    pids <- replicateM count spawnServer
+spawnServers :: Int -> [ProcessId] -> Process ()
+spawnServers count pidsRemote = do
+    pidsLocal <- replicateM count spawnServer
+    let pids = pidsLocal ++ pidsRemote
     mapM_ (`send` pids) pids
 
+
+master :: Backend -> [NodeId] -> Process ()
+master backend slaves = do
+  -- Do something interesting with the slaves
+  liftIO . putStrLn $ "Slaves: " ++ show slaves
+  -- Terminate the slaves when the master terminates (this is optional)
+  terminateAllSlaves backend
+
+main :: IO ()
 main = do
-    Right transport <- createTransport (defaultTCPAddr "localhost" "0") defaultTCPParameters
-    backendNode <- newLocalNode transport initRemoteTable
-    runProcess backendNode (spawnServers 10)
-    putStrLn "Push enter to exit"
-    getLine
+  args <- getArgs
+
+  case args of
+    ["master", host, port] -> do
+      backend <- initializeBackend host port initRemoteTable
+      startMaster backend (master backend)
+    ["slave", host, port] -> do
+      backend <- initializeBackend host port initRemoteTable
+      startSlave backend
+
+-- main = do
+--     [host, port] <- getArgs
+  
+--     backend <- initializeBackend host port initRemoteTable
+--     node    <- newLocalNode backend
+--     peers   <- findPeers backend 1000000
+--     -- runProcess node $ forM_ peers $ \peer -> nsendRemote peer "echo-server" "hello!"
+--     runProcess backend (spawnServers 2 peers)
+--     putStrLn "Push enter to exit"
+--     getLine

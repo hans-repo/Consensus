@@ -19,11 +19,12 @@ import Data.Typeable (Typeable) -- For safe serialization
 import Control.Monad.RWS.Strict (
     RWS, MonadReader, MonadWriter, MonadState, ask, tell, get, execRWS, liftIO)
 import Control.Monad (replicateM, forever)
+import Control.Monad.IO.Class (liftIO)
 import Control.Concurrent (threadDelay)
 import Control.Lens --(makeLenses, (+=), (%%=), use, view, (.=), (^.))
 import Control.Lens.Getter ( view, Getting )
 
-import System.Random (StdGen, Random, randomR, newStdGen)
+import System.Random (StdGen, Random, randomR, newStdGen, randomRIO)
 import Data.Foldable (find)
 import qualified Data.Vector as V
 
@@ -177,7 +178,29 @@ spawnAll count crashCount clientCount batchSize = do
     say $ "sent servers " ++ show pids
     mapM_ (`send` clientPids) allPids
     say $ "sent clients " ++ show clientPids
-    mapM_ (`kill` "crash node") (take crashCount pids)
+    -- mapM_ (`kill` "crash node") (take crashCount pids)
+    toCrashNodes <- liftIO $ selectRandomElements crashCount pids
+    mapM_ (`kill` "crash node") toCrashNodes
+
+-- Function to select x random elements from a list
+selectRandomElements :: Int -> [a] -> IO [a]
+selectRandomElements x xs = do
+    let n = length xs
+    if n == 0 || x <= 0 then return []  -- Return empty list if input is invalid
+    else do
+        indices <- randomIndices x n
+        return [xs !! i | i <- indices]  -- Select elements using the random indices
+
+-- Helper function to generate unique random indices
+randomIndices :: Int -> Int -> IO [Int]
+randomIndices x n = go x []
+  where
+    go 0 acc = return acc
+    go m acc = do
+        idx <- randomRIO (0, n - 1)
+        if idx `elem` acc then go m acc  -- Ensure uniqueness
+        else go (m - 1) (idx : acc)
+
 
 runServer :: ServerConfig -> ServerState -> Process ()
 runServer config state = do

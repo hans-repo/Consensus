@@ -6,15 +6,16 @@ import threading
 
 
 nrExperiments = 20
-protocolName = "gcp"
+protocolName = "hotstuff"
 nodes = 0  # Number of nodes
-time = 60  # Number of seconds to run the experiment
+time = 600  # Number of seconds to run the experiment
 batchSize = 10 #62500 for 500KB of transactions sized 8B each, Narwhal's batch size
-
+crashes = 0
 
 for i in range(nrExperiments):
     nodes = nodes + 5
-    crashes = (nodes-1) // 3
+    # crashes = (nodes-1) // 3
+    # crashes = nodes // 4
     # batchSize = batchSize + 50
     # Command to run the Haskell program using cabal
     command = [

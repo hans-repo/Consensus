@@ -1,4 +1,4 @@
-packages: gcp hotstuff gradedProposalElection sleepyBlockDAG
+packages: gcp hotstuff gradedProposalElection sleepyBlockDAG bingbong
 allow-newer: gradedProposalElection
 
 package *
