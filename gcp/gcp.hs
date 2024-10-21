@@ -97,7 +97,7 @@ spawnServer batchSize= spawnLocal $ do
     say $ "received servers " ++ show otherPids
     clientPids <- expect
     say $ "received clients " ++ show clientPids
-    let tickTime = 10^5
+    let tickTime = 10^4
         timeoutMicroSeconds = 10*10^5
         timeoutTicks = timeoutMicroSeconds `div` tickTime
     say $ "synchronous delta timers set to " ++ show timeoutTicks ++ " ticks"
@@ -113,7 +113,7 @@ spawnClient cmdRate = spawnLocal $ do
     otherPids <- expect
     say $ "received servers at client" ++ show otherPids
     clientPids <- expect
-    let tickTime = 1*10^5
+    let tickTime = 1*10^4
         timeoutMicroSeconds = 2*10^5
         timeoutTicks = timeoutMicroSeconds `div` tickTime
     spawnLocal $ forever $ do

@@ -1,6 +1,7 @@
+
+dist-newstyle/
+dist/
 output*
 1sec*
 nodes*
-dist-newstyle/
-dist/
 dist-newstyle*

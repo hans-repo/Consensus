@@ -100,7 +100,7 @@ def parse_latency2(filename):
             if match:
                 latency = float(match.group(1))
                 if latency > 1:
-                    all_latency.append(latency*0.1)
+                    all_latency.append(latency*0.01)
     skip_start = int(len(all_latency) * 1)
     return all_latency[-skip_start:]
 
@@ -125,7 +125,7 @@ def parse_latency2(filename):
     
 #     return ratios
 
-pathToResults = "gcp/results/nodes5-100_time60_crashesThird/"
+pathToResults = "gcp/results/nodes5-200_time600_nocrash/"
 # pathToResults = ""
 
 latencyResults = []
@@ -161,7 +161,6 @@ plt.ylabel('Average Latency (s)')
 
 
 nodesIncrements = 5
-nrExperiments = 20
 nodes = list(range(i))
 nodes= [5+nodesIncrements*x for x in nodes]
 # plt.plot(nodes[:14], avgThroughputs[:14], marker='+',label="Malkhi et al.")
@@ -185,7 +184,7 @@ def k_formatter(x, pos):
 ax.xaxis.set_major_formatter(FuncFormatter(k_formatter))
 
 
-pathToResults2 ="hotstuff/results/nodes5-100_time60_nocrash/"
+pathToResults2 ="hotstuff/results/nodes5-200_time600_nocrash/"
 # pathToResults2 = ""
 latencyResults2 = []
 throughputResults2 = []
@@ -212,7 +211,7 @@ stdLatencies2 = [r[2] for r in latencyResults2]
 
 # plt.plot(nodes[:14], avgThroughputs2[:14],  marker='+', color='orange', label="Dynamic DAG")
 plt.plot(nodes, avgLatencies2,  marker='+', color='cyan', label="Hotstuff")
-plt.ylim(0, 5)
+plt.ylim(0, 20)
 # plt.yscale('log')
 
 plt.legend()

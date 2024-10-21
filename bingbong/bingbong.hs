@@ -102,7 +102,8 @@ spawnServers count pidsRemote = do
 master :: Backend -> [NodeId] -> Process ()
 master backend slaves = do
   -- Do something interesting with the slaves
-  liftIO . putStrLn $ "Slaves: " ++ show slaves
+  peers <- findSlaves backend
+  liftIO . putStrLn $ "Slaves: " ++ show peers
   -- Terminate the slaves when the master terminates (this is optional)
   terminateAllSlaves backend
 

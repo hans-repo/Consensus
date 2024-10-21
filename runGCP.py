@@ -5,11 +5,11 @@ import sys
 import threading
 
 
-nrExperiments = 20
-protocolName = "hotstuff"
+nrExperiments = 40
+protocolName = "gcp"
 nodes = 0  # Number of nodes
 time = 600  # Number of seconds to run the experiment
-batchSize = 10 #62500 for 500KB of transactions sized 8B each, Narwhal's batch size
+batchSize = 1 #62500 for 500KB of transactions sized 8B each, Narwhal's batch size
 crashes = 0
 
 for i in range(nrExperiments):
