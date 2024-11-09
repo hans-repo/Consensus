@@ -56,22 +56,22 @@ data Signature = Signature String
 
 --block datatype, contains list of commands, justifying quorum certificate qc, height, block hash, and parent block.
 --Note that it references the entire blockchain through the parent block link
-data Block = Block {content :: [Command],qc :: QC, height :: Int, blockHash :: BlockHash, parent :: [Block]}
+data Block = Block {blockHash :: BlockHash, content :: [Command],qc :: QC, height :: Int, parent :: [Block]}
     deriving (Show, Generic, Typeable, Eq)
 
 genesisBlock :: Block 
 genesisBlock = Block {content = [], qc = genesisQC, height = 0, blockHash = BlockHash "genesis", parent = []}
 
 --block datatype linking to the hash of the parent instead of the entire blockchain as in Block.
-data SingleBlock = SingleBlock {contentS :: V.Vector Command, qcS :: QC, heightS :: Int, blockHashS :: BlockHash, parentS :: [BlockHash]}
+data SingleBlock = SingleBlock {blockHashS :: BlockHash, contentS :: V.Vector Command, qcS :: QC, heightS :: Int, parentS :: [BlockHash]}
     deriving (Show, Generic, Typeable, Eq)
 
 genesisBlockSingle :: SingleBlock
-genesisBlockSingle = SingleBlock {contentS = V.fromList [], qcS = genesisQC, heightS = 0, blockHashS = BlockHash "genesis", parentS = []}
+genesisBlockSingle = SingleBlock {blockHashS = BlockHash "genesis", contentS = V.fromList [], qcS = genesisQC, heightS = 0, parentS = []}
 
 
 --Quorum certificate, list of signatures and hash of signed block.
-data QC = QC {signatures :: [Signature], hash :: BlockHash}
+data QC = QC {hash :: BlockHash, signatures :: [Signature]}
     deriving (Show, Generic, Typeable, Eq)
 
 --see initialization of event-driven Hotstuff.
@@ -97,7 +97,7 @@ instance Binary QC
 instance Binary Block
 -- instance Binary SingleBlock
 instance Binary SingleBlock where
-    put (SingleBlock contentS qcS heightS blockHashS parentS) = do
+    put (SingleBlock blockHashS contentS qcS heightS  parentS) = do
         put (V.toList contentS)
         put qcS
         put heightS
@@ -110,7 +110,7 @@ instance Binary SingleBlock where
         heightS <- get
         blockHashS <- get
         parentS <- get
-        return $ SingleBlock (V.fromList contentList) qcS heightS blockHashS parentS
+        return $ SingleBlock blockHashS (V.fromList contentList) qcS heightS  parentS
 -- instance Binary MessageType
 instance Binary MessageType where
     put (CommandMsg cmd) = do

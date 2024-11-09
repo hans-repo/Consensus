@@ -108,7 +108,7 @@ onReceiveVote bNewHash sign = do
     ServerState _ _ _ _ _ _ _ voteListNew ticksSinceMsg _ _ _<- get
     let votesBNew = fromMaybe [] (Map.lookup (blockHashS bNew) voteListNew)
         quorum = 2 * div (Map.size ticksSinceMsg) 3 + 1
-    let action  | length votesBNew >= quorum = do updateQCHigh $ QC {signatures = votesBNew, hash = blockHashS bNew}
+    let action  | length votesBNew >= quorum = do updateQCHigh $ QC {signatures = votesBNew, hash = bNewHash}
                 | otherwise = return ()
     action
 
@@ -171,10 +171,9 @@ onNextSyncView = do
 onReceiveNewView :: Int -> QC -> Signature -> ServerAction ()
 onReceiveNewView view qc sign = do 
     ServerState _ _ _ _ _ _ _ voteListOld ticksSinceMsg _ _ _<- get
-    let quorum = 2 * div (Map.size ticksSinceMsg) 3 + 1 
-        votes = voteListOld
+    let votes = voteListOld
         votesT = fromMaybe [] (Map.lookup (TimeoutView view) votes)
     let actionAddToList | sign `elem` votesT = return ()
                         | otherwise = do voteList .= Map.insertWith (++) (TimeoutView view) [sign] voteListOld
     actionAddToList
-    updateQCHigh qc
+    updateQCHigh qc 

@@ -11,6 +11,8 @@ nodes = 0  # Number of nodes
 time = 600  # Number of seconds to run the experiment
 batchSize = 1 #62500 for 500KB of transactions sized 8B each, Narwhal's batch size
 crashes = 0
+host = "192.168.0.115"
+port = 8088 
 
 for i in range(nrExperiments):
     nodes = nodes + 5
@@ -23,7 +25,10 @@ for i in range(nrExperiments):
         "--replicas", str(nodes),
         "--crashes", str(crashes),
         "--time", str(time),
-        "--batchSize", str(batchSize)
+        "--batchSize", str(batchSize),
+        "--host", str(host),
+        "--port", str(port),
+        "-m", "master"
     ]
 
     # Setup logger for the current experiment

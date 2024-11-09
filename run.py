@@ -6,16 +6,17 @@ import threading
 
 
 nrExperiments = 7
-protocolName = "gradedProposalElection"
+protocolName = "sleepyBlockDAG"
 nodes = 0  # Number of nodes
 time = 300  # Number of seconds to run the experiment
 batchSize = 10 #62500 for 500KB of transactions sized 8B each, Narwhal's batch size
 crashes = 0
-
+host = "192.168.0.115"
+port = 8088
 
 for i in range(nrExperiments):
     nodes = nodes + 5
-    crashes = nodes // 3
+    # crashes = nodes // 3
     # batchSize = batchSize + 50
     # Command to run the Haskell program using cabal
     command = [
@@ -23,7 +24,10 @@ for i in range(nrExperiments):
         "--replicas", str(nodes),
         "--time", str(time),
         "--crashes", str(crashes),
-        "--batchSize", str(batchSize)
+        "--batchSize", str(batchSize),
+        "--host", str(host),
+        "--port", str(port),
+        "-m", "master"
     ]
 
     # Setup logger for the current experiment

@@ -6,15 +6,40 @@ module ParseOptions
 import Options.Applicative
 
 data Options = Options
-  { replicas :: Int
+  { host :: String
+  , port :: String
+  , masterorslave :: String
+  , replicas :: Int
   , crashes  :: Int
   , time :: Int 
   , batchSize :: Int
+
   }
 
 optionsParser :: Parser Options
 optionsParser = Options
-  <$> option auto
+  <$> strOption
+      ( long "host"
+     <> short 'h'
+     <> metavar "HOST"
+     <> help "Local IP Address"
+     <> value "localhost"
+     <> showDefault )
+  <*> strOption
+      ( long "port"
+     <> short 'p'
+     <> metavar "PORT"
+     <> help "Port"
+     <> value "4444"
+     <> showDefault )
+  <*> strOption
+      ( long "masterorslave"
+     <> short 'm'
+     <> metavar "MASTERORSLAVE"
+     <> help "Operate as master or slave"
+     <> value "slave"
+     <> showDefault )
+  <*> option auto
       ( long "replicas"
      <> short 'r'
      <> metavar "REPLICAS"
@@ -40,8 +65,9 @@ optionsParser = Options
      <> short 'b'
      <> metavar "BATCHSIZE"
      <> help "Number of commands included in a block"
-     <> value 10 -- Default value for crashes
+     <> value 2 -- Default value for crashes
      <> showDefault )
+
   -- <*> option auto
   --     ( long "delta"
   --    <> short 'd'

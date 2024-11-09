@@ -5,7 +5,7 @@ import os
 from matplotlib.ticker import FuncFormatter
 from datetime import datetime
 
-pathToResults = "sleepyBlockDAG/1secrate_nodes5-75_batch32_time600/"
+pathToResults = "gradedProposalElection/results/1secrate_nodes5-100_batch32_time600/"
 # pathToResults = ""
 
 def calculate_stats(data):
@@ -162,7 +162,9 @@ nrExperiments = 20
 nodes = list(range(i))
 nodes= [5+nodesIncrements*x for x in nodes]
 # plt.plot(nodes[:14], avgThroughputs[:14], marker='+',label="Malkhi et al.")
-plt.plot(nodes[:14], avgLatencies[:14], marker='+',label="Malkhi et al.")
+plt.plot(nodes, avgThroughputs, marker='+',label="Malkhi et al.")
+# plt.plot(nodes[:14], avgLatencies[:14], marker='+',label="Malkhi et al.")
+# plt.plot(nodes, avgLatencies, marker='+',label="Malkhi et al.")
 plt.xlabel('Number of nodes')
 # plt.ylabel('Average throughput (tps)')
 
@@ -182,7 +184,7 @@ def k_formatter(x, pos):
 ax.xaxis.set_major_formatter(FuncFormatter(k_formatter))
 
 
-pathToResults2 ="sleepyBlockDAG/1secrate_nodes5-100_batch32_time120/"
+pathToResults2 ="sleepyBlockDag/results/1secrate_nodes5-100_batch32_time600/"
 # pathToResults2 = ""
 latencyResults2 = []
 throughputResults2 = []
@@ -208,8 +210,10 @@ avgLatencies2 = [r[1] for r in latencyResults2]
 stdLatencies2 = [r[2] for r in latencyResults2]
 
 # plt.plot(nodes[:14], avgThroughputs2[:14],  marker='+', color='orange', label="Dynamic DAG")
-plt.plot(nodes[:14], avgLatencies2[:14],  marker='+', color='orange', label="Dynamic DAG")
-plt.ylim(0, 7)
+plt.plot(nodes, avgThroughputs2,  marker='+', color='orange', label="Dynamic DAG")
+# plt.plot(nodes[:14], avgLatencies2[:14],  marker='+', color='orange', label="Dynamic DAG")
+# plt.plot(nodes,avgLatencies2,marker='+', color='orange', label="Dynamic DAG")
+plt.ylim(0, 10)
 # plt.yscale('log')
 
 plt.legend()

@@ -4,9 +4,12 @@
 {-# LANGUAGE BangPatterns #-}
 import qualified Data.Map as Map
 import Control.Distributed.Process.Node (initRemoteTable, runProcess, newLocalNode)
-import Control.Distributed.Process (Process, ProcessId, kill,
-    send, say, expect, getSelfPid, spawnLocal, match, receiveWait)
+import Control.Distributed.Process (Process, ProcessId, NodeId, kill,
+    send, say, expect, getSelfPid, spawnLocal, spawn, match, receiveWait, terminate)
 import Network.Transport.TCP (createTransport, defaultTCPAddr, defaultTCPParameters)
+import Control.Distributed.Process.Closure
+
+import Text.Printf
 
 import Data.Maybe
 import Data.Binary (Binary) -- Objects have to be binary to send over the network
@@ -18,11 +21,22 @@ import Data.Typeable (Typeable) -- For safe serialization
 
 import Control.Monad.RWS.Strict (
     RWS, MonadReader, MonadWriter, MonadState, ask, tell, get, execRWS, liftIO)
-import Control.Monad (replicateM, forever)
+import Control.Monad (replicateM, forever, forM)
 import Control.Monad.IO.Class (liftIO)
 import Control.Concurrent (threadDelay)
 import Control.Lens --(makeLenses, (+=), (%%=), use, view, (.=), (^.))
 import Control.Lens.Getter ( view, Getting )
+-- import Control.Distributed.Process hiding (Message, match)
+import Control.Distributed.Process.Node (initRemoteTable)
+import Control.Distributed.Process.Backend.SimpleLocalnet
+import Control.Distributed.Static hiding (initRemoteTable)
+
+import System.Environment
+import System.IO (hFlush, stdout) -- Add this import
+
+import Network.Socket (shutdown)
+
+import Language.Haskell.TH hiding (match)
 
 import System.Random (StdGen, Random, randomR, newStdGen, randomRIO)
 import Data.Foldable (find)
@@ -54,7 +68,6 @@ tickServerHandler Tick = do
             | Map.findWithDefault 0 leader ticksSinceMsgOld > timeout = onNextSyncView
             | otherwise = return ()
     actionNewView
-
 
 -- Handle all types of messages
 -- CommandMsg from client, ProposeMsg from leader, VoteMsg
@@ -134,53 +147,6 @@ sendWithDelay delay recipient msg = do
     liftIO $ threadDelay delay
     send recipient msg
 
--- network stack (impure)
-spawnServer :: Int -> Process ProcessId
-spawnServer batchSize= spawnLocal $ do
-    myPid <- getSelfPid
-    otherPids <- expect
-    say $ "received servers " ++ show otherPids
-    clientPids <- expect
-    say $ "received clients " ++ show clientPids
-    let tickTime = 10^4
-        timeoutMicroSeconds = 10*10^5
-        timeoutTicks = timeoutMicroSeconds `div` tickTime
-    say $ "synchronous delta timers set to " ++ show timeoutTicks ++ " ticks"
-    spawnLocal $ forever $ do
-        liftIO $ threadDelay tickTime
-        send myPid Tick
-    randomGen <- liftIO newStdGen
-    runServer (ServerConfig myPid otherPids (Signature (show randomGen)) timeoutTicks clientPids) (ServerState 0 0 genesisBlockSingle genesisBlockSingle genesisBlockSingle [genesisBlockSingle] genesisQC Map.empty (Map.fromList [(key, 0) | key <- otherPids]) batchSize 0 randomGen)
-
-spawnClient :: Int -> Process ProcessId
-spawnClient batchSize = spawnLocal $ do
-    myPid <- getSelfPid
-    otherPids <- expect
-    say $ "received servers at client" ++ show otherPids
-    clientPids <- expect
-    let tickTime = 1*10^4
-        timeoutMicroSeconds = 2*10^5
-        timeoutTicks = timeoutMicroSeconds `div` tickTime
-    spawnLocal $ forever $ do
-        liftIO $ threadDelay tickTime
-        send myPid Tick
-    randomGen <- liftIO newStdGen
-    runClient (ServerConfig myPid otherPids (Signature (show randomGen)) timeoutTicks clientPids) (ClientState 0 0 (V.fromList []) 0 randomGen batchSize 0)
-
-
-spawnAll :: Int -> Int -> Int -> Int -> Process ()
-spawnAll count crashCount clientCount batchSize = do
-    pids <- replicateM count (spawnServer batchSize)
-    
-    clientPids <- replicateM clientCount (spawnClient batchSize)
-    let allPids = pids ++ clientPids
-    mapM_ (`send` pids) allPids
-    say $ "sent servers " ++ show pids
-    mapM_ (`send` clientPids) allPids
-    say $ "sent clients " ++ show clientPids
-    -- mapM_ (`kill` "crash node") (take crashCount pids)
-    toCrashNodes <- liftIO $ selectRandomElements crashCount pids
-    mapM_ (`kill` "crash node") toCrashNodes
 
 -- Function to select x random elements from a list
 selectRandomElements :: Int -> [a] -> IO [a]
@@ -209,12 +175,18 @@ runServer config state = do
             match $ run msgHandler,
             match $ run tickServerHandler]
     let !state'' = state'
-    let prints -- | False = return () --null outputMessages = return ()
-               | null outputMessages = return ()
-               | otherwise = do say $ "Current state: " ++ show state' ++ "\n"
+    let leader = getLeader (peers config) (_cView state)
+        quorum = 2 * div (length $ peers config) 3 + 1
+        votesB = fromMaybe [] (Map.lookup (blockHashS $ _bLeaf state') (_voteList state'))
+        votesT = fromMaybe [] (Map.lookup (TimeoutView ((_cView state')-1)) (_voteList state'))
+
+    let prints | null outputMessages = return ()
+               | otherwise = do --say $ "Vote List length for hash " ++ show (blockHashS $ _bLeaf state') ++ " is : " ++ show (length votesB) ++ "\n" ++ "newview list length for view " ++ show ((_cView state')-1) ++ " : " ++ show (length votesT) ++ "\n"
+                                --say $ "bRecent: " ++ show (_bRecent state) ++ "\n"
                                 say $ "Sending Messages : "  ++ show outputMessages ++ "\n"
-    -- prints
-    let latency = 0*10^5
+                                -- say $ "Current leader: " ++ show leader ++ " current view: " ++ show (_cView state) ++ "\n"
+    prints
+    let latency = 1*10^5
     let memoryPrints = do --say $ "Length of bRecent : " ++ show (length $ _bRecent state' ) ++ "\n"
                         --   say $ "Size of bRecent : " ++ show (getSizeInBytes $ _bRecent state' ) ++ "\n"
                           say $ show (getSizeInBytes $ outputMessages) ++ "\n"
@@ -222,6 +194,7 @@ runServer config state = do
                           --say $ "Length of mempool : " ++ show (length $ _mempool state' ) ++ "\n"
                           
     --memoryPrints
+    -- liftIO $ threadDelay (1000)
     mapM (\msg -> sendWithDelay latency (recipientOf msg) msg) outputMessages
 
     runServer config state''
@@ -268,13 +241,87 @@ runClient config state = do
     let !state'' = state'
     runClient config state''
 
-main = do
-    -- cmdRate just serves as an upper limit on lastDelivered for the client, set to the same as batchSize for now.
-    Options replicas crashes time batchSize <- parseOptions
 
-    Right transport <- createTransport (defaultTCPAddr "localhost" "0") defaultTCPParameters
-    backendNode <- newLocalNode transport initRemoteTable
-    runProcess backendNode (spawnAll replicas crashes 1 batchSize) -- number of replicas, number of crashes, number of clients
-    putStrLn $ "Running for " ++ show time ++ " seconds before exiting..."
-    threadDelay (time*1000000)  -- seconds in microseconds
-    putStrLn "Exiting now."
+spawnServer :: Int -> ProcessId -> Process ProcessId
+spawnServer batchSize clientPid = spawnLocal $ do
+    myPid <- getSelfPid
+    mapM_ (`send` myPid) [clientPid]
+    say $ "sent servers" ++ show myPid ++ " to " ++ show [clientPid]
+
+    serverPids <- expect
+    say $ "received servers " ++ show serverPids
+    let tickTime = 1*10^5
+        timeoutMicroSeconds = 10*10^5
+        timeoutTicks = timeoutMicroSeconds `div` tickTime
+    say $ "synchronous delta timers set to " ++ show timeoutTicks ++ " ticks"
+    spawnLocal $ forever $ do
+        liftIO $ threadDelay tickTime
+        send myPid Tick
+    randomGen <- liftIO newStdGen
+    runServer (ServerConfig myPid serverPids (Signature (show randomGen)) timeoutTicks [clientPid]) (ServerState 0 0 genesisBlockSingle genesisBlockSingle genesisBlockSingle [genesisBlockSingle] genesisQC Map.empty (Map.fromList [(key, 0) | key <- serverPids]) batchSize 0 randomGen)
+
+
+spawnClient :: Int -> Int -> Int -> Int -> Process ProcessId
+spawnClient batchSize nSlaves replicas crashCount = spawnLocal $ do
+    clientPid <- getSelfPid
+    say $ "client Pid is: " ++ show clientPid
+    otherPids <- replicateM (nSlaves*replicas) $ do
+        say $ "Expecting next server PID... "
+        pid <- expect  -- Match any message and return it
+        say $ "Received PID: " ++ show pid  -- Print the received message
+        return pid  -- Return the received PID
+    say $ "received servers at client" ++ show otherPids
+    mapM_ (`send` otherPids) otherPids
+    say $ "sent server list to " ++ show otherPids
+
+    --crash randomly selected nodes
+    toCrashNodes <- liftIO $ selectRandomElements crashCount otherPids
+    mapM_ (`kill` "crash node") toCrashNodes
+    say $ "sent crash command to " ++ show toCrashNodes
+  
+    let tickTime = 1*10^5
+        timeoutMicroSeconds = 10*10^5
+        timeoutTicks = timeoutMicroSeconds `div` tickTime
+    spawnLocal $ forever $ do
+        liftIO $ threadDelay tickTime
+        send clientPid Tick
+    randomGen <- liftIO newStdGen
+    runClient (ServerConfig clientPid otherPids (Signature (show randomGen)) timeoutTicks [clientPid]) (ClientState 0 0 (V.fromList []) 0 randomGen batchSize 0)
+
+
+spawnAll :: (ProcessId, Int, Int) -> Process ()
+spawnAll (clientPid, replicas, batchSize) = do
+    pids <- replicateM replicas (spawnServer batchSize clientPid)
+    return ()
+    -- let allPids = pids ++ [clientPid]
+    -- mapM_ (`send` pids) [clientPid]
+    -- say $ "sent servers" ++ show pids ++ " to " ++ show [clientPid]
+
+remotable ['spawnAll]
+
+master :: Backend -> Int -> Int -> Int -> Int -> [NodeId] -> Process ()                     -- <1>
+master backend replicas crashCount time batchSize peers= do
+--   terminateAllSlaves backend
+  clientPid <- spawnClient batchSize (length peers) replicas crashCount
+  liftIO $ threadDelay (100)
+  let spawnCmd = ($(mkClosure 'spawnAll) (clientPid, replicas, batchSize))
+  pids <- forM peers $ \nid -> do  
+        say $ "sent spawn command" ++ show spawnCmd ++ " to: " ++ show nid
+        spawn nid spawnCmd
+  
+  -- Terminate the slaves when the master terminates (this is optional)
+  liftIO $ threadDelay (time*1000000)  -- seconds in microseconds
+  terminateAllSlaves backend
+  terminate
+
+main :: IO ()
+main = do
+  let rtable = Main.__remoteTable initRemoteTable
+  hFlush stdout -- Ensure the output is flushed
+  Options host port masterorslave replicas crashes time batchSize <- parseOptions
+  backend <- initializeBackend host port rtable
+  case masterorslave of
+    "master" -> do
+      startMaster backend $ master backend replicas crashes time batchSize
+    "slave" -> do
+      startSlave backend

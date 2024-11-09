@@ -19,7 +19,7 @@ executable gradedProposalElection
   main-is:             gradedProposalElection.hs
   other-modules:       ParseOptions, ConsensusLogic, ConsensusDataTypes 
   other-extensions:    GeneralizedNewtypeDeriving, DeriveGeneric, TemplateHaskell
-  build-depends:       time, deepseq, vector, bytestring, optparse-applicative, base >= 4.9 && < 5, transformers == 0.5.6.2, containers == 0.6.6, distributed-process, network-transport-tcp >= 0.4.1.0 && < 0.8.2, binary >= 0.6.3 && < 0.10, mtl >= 2.0 && < 2.4, lens >=4.13 && <5.2.3, random >= 1.0 && < 1.3
+  build-depends:       template-haskell, distributed-static, network, distributed-process-simplelocalnet, time, deepseq, vector, bytestring, optparse-applicative, base >= 4.9 && < 5, transformers == 0.5.6.2, containers == 0.6.6, distributed-process, network-transport-tcp >= 0.4.1.0 && < 0.8.2, binary >= 0.6.3 && < 0.10, mtl >= 2.0 && < 2.4, lens >=4.13 && <5.2.3, random >= 1.0 && < 1.3
   -- hs-source-dirs:      
   default-language:    Haskell2010
   --ghc-options: -rtsopts -fprof-auto -prof -static
