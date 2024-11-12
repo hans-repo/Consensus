@@ -93,7 +93,10 @@ tickClientHandler (ClientTick tickTime) = do
         then do
             currLatency .= meanTickDifference lastDeliveredOld tick
             -- currLatency .= elapsedTicks
-            lastDelivered .= V.fromList []
+            -- lastDelivered .= V.fromList []
+        else return ()
+    if V.length lastDeliveredOld > cmdRate
+        then lastDelivered .= V.drop ((V.length lastDeliveredOld) - cmdRate) lastDeliveredOld
         else return ()
 
 
