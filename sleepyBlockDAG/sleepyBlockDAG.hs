@@ -78,14 +78,33 @@ msgHandler (Message sender recipient (ProposeMsg bNew pView)) = do
 tickClientHandler :: Tick -> ClientAction ()
 tickClientHandler Tick = do
     ServerConfig myPid peers _ _ _ <- ask
-    ClientState _ _ lastDeliveredOld lastHeight _ cmdRate tick <- get
-    --sendIndividualCommands cmdRate tick peers
-    --sendNCommands n tick peers
-    --lastDelivered .= []
-    tickCount += 1
-    if V.length lastDeliveredOld > cmdRate
-        then lastDelivered .= V.drop ((V.length lastDeliveredOld) - cmdRate) lastDeliveredOld
+    ClientState _ _ lastDeliveredOld currLatencyOld _ cmdRate tick <- get
+    if lastDeliveredOld /= V.fromList []
+        then do
+            currLatency .= round (meanTickDifference lastDeliveredOld tick)
+            lastDelivered .= V.fromList []
         else return ()
+    tickCount += 1
+
+    -- if V.length lastDeliveredOld > cmdRate
+    --     then lastDelivered .= V.drop ((V.length lastDeliveredOld) - cmdRate) lastDeliveredOld
+    --     else return ()
+
+
+meanTickDifference :: V.Vector Command -> Int -> Double
+meanTickDifference commands tick =
+    let differences = map (\cmd -> fromIntegral (tick - proposeTime cmd)) (V.toList commands)
+    -- let differences = map (\cmd -> fromIntegral (deliverTime cmd - proposeTime cmd)) (V.toList commands)
+        total = sum differences
+        count = length differences
+    in if count == 0 then 0 else total / fromIntegral count
+
+
+-- Function to take the last x elements from a vector
+lastXElements :: Int -> V.Vector a -> V.Vector a
+lastXElements x vec = V.take x (V.drop (V.length vec - x) vec)
+
+
 
 --Send n commands individually per node
 sendIndividualCommands :: Int -> Int -> [ProcessId] -> ClientAction ()
@@ -194,20 +213,6 @@ runServer config state = do
     let !state'' = state'
     runServer config state''
 
-meanTickDifference :: V.Vector Command -> Int -> Double
-meanTickDifference commands tick =
-    let differences = map (\cmd -> fromIntegral (tick - proposeTime cmd)) (V.toList commands)
-    -- let differences = map (\cmd -> fromIntegral (deliverTime cmd - proposeTime cmd)) (V.toList commands)
-        total = sum differences
-        count = length differences
-    in if count == 0 then 0 else total / fromIntegral count
-
-
--- Function to take the last x elements from a vector
-lastXElements :: Int -> V.Vector a -> V.Vector a
-lastXElements x vec = V.take x (V.drop (V.length vec - x) vec)
-
-
 runClient :: ServerConfig -> ClientState -> Process ()
 runClient config state = do
     let run handler msg = return $ execRWS (runClientAction $ handler msg) config state
@@ -215,13 +220,15 @@ runClient config state = do
             match $ run msgHandlerCli,
             match $ run tickClientHandler]
     let throughput = fromIntegral (_deliveredCount state') / fromIntegral (_tickCount state') 
-        meanLatency = meanTickDifference (lastXElements (_clientBatchSize state') (_lastDelivered state')) (_tickCount state')
+        -- meanLatency = meanTickDifference (_lastDelivered state') (_tickCount state')
+        -- meanLatency = meanTickDifference (lastXElements (_clientBatchSize state') (_lastDelivered state')) (_tickCount state')
     let throughputPrint 
             -- | (_lastDelivered state') /= (_lastDelivered state) = say $ "Current throughput: " ++ show throughput ++ "\n" ++ "deliveredCount: " ++ show (_deliveredCount state') ++ "\n" ++ "tickCount: " ++ show (_tickCount state') ++ "\n" ++ "lastDelivered: " ++ show (V.toList $ _lastDelivered state') ++ "\n"
             | ((_lastDelivered state') /= (_lastDelivered state)) && ((_lastDelivered state') /= V.empty) = say $ "Delivered commands " ++ show (_deliveredCount state') ++ "\n" 
             | otherwise = return ()
     let latencyPrint 
-            | ((_lastDelivered state') /= (_lastDelivered state)) && ((_lastDelivered state') /= V.empty) = say $ "Current mean latency: " ++ show meanLatency ++ "\n"
+            -- | ((_lastDelivered state') /= (_lastDelivered state)) && ((_lastDelivered state') /= V.empty) = say $ "Current mean latency: " ++ show meanLatency ++ "\n"
+            | ((_lastDelivered state') /= (_lastDelivered state)) && ((_lastDelivered state') /= V.empty) = say $ "Current mean latency: " ++ show (_currLatency state') ++ "\n"
             | otherwise = return ()
     let prints 
             | state' /= state = say $ "Current state: " ++ show state'++ "\n"
@@ -229,8 +236,9 @@ runClient config state = do
     throughputPrint
     latencyPrint
     --prints
+    -- say $ "client batch size: " ++ show (_clientBatchSize state')
     --say $ "Sending Messages : " ++ show outputMessages++ "\n"
-    --say $ "Size of lastDelivered : " ++ show (getSizeInBytes (V.toList $ _lastDelivered state')) ++ "\n"
+    say $ "Size of lastDelivered : " ++ show (V.length $ _lastDelivered state) ++ "\n"
     mapM (\msg -> send (recipientOf msg) msg) outputMessages
     let !state'' = state'
     runClient config state''

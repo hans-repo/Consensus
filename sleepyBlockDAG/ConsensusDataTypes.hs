@@ -123,7 +123,7 @@ data ClientState = ClientState {
     _sentCount :: !Int, --number of sent commands
     _deliveredCount :: !Int, --number of delivered commands
     _lastDelivered :: !(V.Vector Command), --last batch of delivered commands
-    _rHeight :: !Int, --height of last received confirmed block
+    _currLatency :: !Int, --height of last received confirmed block
     _randomGenCli :: !StdGen, --last random number generation
     _clientBatchSize :: !Int, ----size of delivered batches, same as server batchSize
     _tickCount :: !Int --tick counter
