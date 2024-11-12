@@ -122,7 +122,7 @@ onCommit bExec b = do
  -- confirm delivery to all clients and servers
 execute :: Int -> V.Vector Command -> ServerAction ()
 execute height cmds = do 
-    ServerState _ _ _ _ _ _ _ _ _ _ _ tick _<- get
+    ServerState _ _ _ _ _ _ _ _ _ _ _ tick _ <- get
     ServerConfig _ _ _ _ _ clients<- ask
     let toDeliverCmds = V.fromList $ map (setDeliverTime tick) (V.toList cmds)
     broadcastAll clients (DeliverMsg {deliverCommands = toDeliverCmds, deliverHeight = height})
@@ -177,8 +177,8 @@ onReceiveNewView :: Int -> QC -> Signature -> ServerAction ()
 onReceiveNewView view qc sign = do 
     ServerState _ _ _ _ _ _ _ voteListOld ticksSinceMsg _ _ _ _<- get
     let votes = voteListOld
-        votesT = fromMaybe [] (Map.lookup (TimeoutView view) votes)
+        votesT = fromMaybe [] (Map.lookup (BlockHash $ show view) votes)
     let actionAddToList | sign `elem` votesT = return ()
-                        | otherwise = do voteList .= Map.insertWith (++) (TimeoutView view) [sign] voteListOld
+                        | otherwise = do voteList .= Map.insertWith (++) (BlockHash $ show view) [sign] voteListOld
     actionAddToList
     updateQCHigh qc 

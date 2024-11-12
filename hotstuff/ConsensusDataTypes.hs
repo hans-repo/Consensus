@@ -47,7 +47,7 @@ data Command = Command {cmdId :: !String, deliverTime :: !Int, proposeTime :: !I
     deriving (Show, Generic, Typeable, Eq)
 
 --hash of a block
-data BlockHash = BlockHash String | TimeoutView Int
+data BlockHash = BlockHash String
     deriving (Show, Generic, Typeable, Eq, Ord)
 
 --placeholder cryptographic signature
@@ -128,7 +128,7 @@ instance Binary MessageType where
         put proposal
         put view
     put (NewViewMsg newViewQC newViewId newViewSign) = do
-        putWord8 2
+        putWord8 4
         put newViewQC
         put newViewId
         put newViewSign

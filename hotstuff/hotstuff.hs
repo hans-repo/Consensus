@@ -62,7 +62,7 @@ tickServerHandler (ServerTick tickTime) = do
     let leader = getLeader peers cView
         quorum = 2 * div (length peers) 3 + 1
         votesB = fromMaybe [] (Map.lookup (blockHashS bLeaf) voteList)
-        votesT = fromMaybe [] (Map.lookup (TimeoutView (cView-1)) voteList)
+        votesT = fromMaybe [] (Map.lookup (BlockHash $ show (cView-1)) voteList)
     let actionLead
     -- propose if a quorum for the previous block is reached, or a quorum of new view messages, or if it is the first proposal (no previous quorum)
             | leader == myPid && (length votesB >= quorum || length votesT >= quorum || bLeaf == genesisBlockSingle) = onPropose
@@ -77,10 +77,6 @@ tickServerHandler (ServerTick tickTime) = do
 -- CommandMsg from client, ProposeMsg from leader, VoteMsg
 -- TODO New View message, 
 msgHandler :: Message -> ServerAction ()
---receive commands from client
--- msgHandler (Message sender recipient (CommandMsg cmd)) = do
---     ServerState _ _ _ _ _ _ _ _ _ mempoolOld _  <- get
---     mempool .= cmd:mempoolOld
 --receive proposal, onReceiveProposal
 msgHandler (Message sender recipient (ProposeMsg bNew pView)) = do 
     --handle proposal
@@ -187,23 +183,27 @@ runServer config state = do
     let leader = getLeader (peers config) (_cView state)
         quorum = 2 * div (length $ peers config) 3 + 1
         votesB = fromMaybe [] (Map.lookup (blockHashS $ _bLeaf state') (_voteList state'))
-        votesT = fromMaybe [] (Map.lookup (TimeoutView ((_cView state')-1)) (_voteList state'))
+        votesT = fromMaybe [] (Map.lookup (BlockHash $ show ((_cView state')-1)) (_voteList state'))
 
     let prints | null outputMessages = return ()
                | otherwise = do --say $ "Vote List length for hash " ++ show (blockHashS $ _bLeaf state') ++ " is : " ++ show (length votesB) ++ "\n" ++ "newview list length for view " ++ show ((_cView state')-1) ++ " : " ++ show (length votesT) ++ "\n"
-                                --say $ "bRecent: " ++ show (_bRecent state) ++ "\n"
+                                -- say $ "state: " ++ show state ++ "\n"
                                 say $ "Sending Messages : "  ++ show outputMessages ++ "\n"
+                                -- say $ "vote list increase: " ++ show (_voteList state') ++ "\n"
                                 -- say $ "Current leader: " ++ show leader ++ " current view: " ++ show (_cView state) ++ "\n"
     -- prints
-    let latency = 0*10^3
+    let votesPrints | (_voteList state') /= (_voteList state) = do say $ "vote list increase: " ++ show (_voteList state') ++ "\n"
+                    | otherwise = return ()
+    -- votesPrints
+    let latency = 0*10^5
     let memoryPrints = do --say $ "Length of bRecent : " ++ show (length $ _bRecent state' ) ++ "\n"
                         --   say $ "Size of bRecent : " ++ show (getSizeInBytes $ _bRecent state' ) ++ "\n"
                           say $ show (getSizeInBytes $ outputMessages) ++ "\n"
                           --say $ "Size of mempool : " ++ show (getSizeInBytes $ _mempool state' ) ++ "\n"
                           --say $ "Length of mempool : " ++ show (length $ _mempool state' ) ++ "\n"
                           
-    --memoryPrints
-    liftIO $ threadDelay (1000)
+    -- memoryPrints
+    -- liftIO $ threadDelay (1000)
     mapM (\msg -> sendWithDelay latency (recipientOf msg) msg) outputMessages
 
     runServer config state''
@@ -244,7 +244,7 @@ runClient config state = do
             | otherwise = return ()
     throughputPrint
     latencyPrint
-    --prints
+    -- prints
     --say $ "Sending Messages : " ++ show outputMessages++ "\n"
     mapM (\msg -> send (recipientOf msg) msg) outputMessages
     let !state'' = state'
@@ -259,7 +259,7 @@ spawnServer batchSize clientPid = spawnLocal $ do
 
     serverPids <- expect
     say $ "received servers " ++ show serverPids
-    let tickTime = 1*10^3
+    let tickTime = 1*10^4
         timeoutMicroSeconds = 10*10^5
         timeoutTicks = timeoutMicroSeconds `div` tickTime
     say $ "synchronous delta timers set to " ++ show timeoutTicks ++ " ticks"
@@ -292,7 +292,7 @@ spawnClient batchSize nSlaves replicas crashCount = spawnLocal $ do
     mapM_ (`kill` "crash node") toCrashNodes
     say $ "sent crash command to " ++ show toCrashNodes
   
-    let tickTime = 1*10^3
+    let tickTime = 1*10^4
     spawnLocal $ forever $ do
         liftIO $ threadDelay tickTime
         currentTime <- liftIO getPOSIXTime
