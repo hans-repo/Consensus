@@ -112,12 +112,11 @@ tickClientHandler (ClientTick tickTime) = do
         then do
             currLatency .= meanTickDifference lastDeliveredOld tick
             -- currLatency .= elapsedTicks
-            lastDelivered .= V.fromList []
+            -- lastDelivered .= V.fromList []
         else return ()
-
-    -- if V.length lastDeliveredOld > cmdRate
-    --     then lastDelivered .= V.drop ((V.length lastDeliveredOld) - cmdRate) lastDeliveredOld
-    --     else return ()
+    if V.length lastDeliveredOld > cmdRate
+        then lastDelivered .= V.drop ((V.length lastDeliveredOld) - cmdRate) lastDeliveredOld
+        else return ()
 
 
 meanTickDifference :: V.Vector Command -> Int -> Double
@@ -348,7 +347,7 @@ master backend replicas crashCount time batchSize peers= do
   
   -- Terminate the slaves when the master terminates (this is optional)
   liftIO $ threadDelay (time*1000000)  -- seconds in microseconds
-  terminateAllSlaves backend
+--   terminateAllSlaves backend
   terminate
 
 main :: IO ()
