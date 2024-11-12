@@ -238,7 +238,7 @@ runClient config state = do
     --prints
     -- say $ "client batch size: " ++ show (_clientBatchSize state')
     --say $ "Sending Messages : " ++ show outputMessages++ "\n"
-    say $ "Size of lastDelivered : " ++ show (V.length $ _lastDelivered state) ++ "\n"
+    --say $ "Size of lastDelivered : " ++ show (V.length $ _lastDelivered state) ++ "\n"
     mapM (\msg -> send (recipientOf msg) msg) outputMessages
     let !state'' = state'
     runClient config state''
