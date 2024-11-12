@@ -185,7 +185,8 @@ onDecide = do
     ServerConfig myPid peers staticSignature _ _ _ <- ask
     -- next view, reset timers for all peers
     ticksSinceSend .=0
-    execute bLeaf
+    if bLeaf /= bExecOld then do execute bLeaf
+    else return ()
     cView += 1
     bExec .= bLeaf
     --bRecent .= filter (`notElem` [bLeaf]) bRecentOld
