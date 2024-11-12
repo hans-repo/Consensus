@@ -51,10 +51,10 @@ appendIfNotExists x xs
 -- Broadcasting
 broadcastAll :: [ProcessId] -> MessageType -> ServerAction ()
 broadcastAll [single] content = do
-    ServerConfig myId _ _ _ _<- ask
+    ServerConfig myId _ _ _ _ _<- ask
     tell [Message myId single content]
 broadcastAll (single:recipients) content = do
-    ServerConfig myId _ _ _ _<- ask
+    ServerConfig myId _ _ _ _ _<- ask
     tell [Message myId single content]
     broadcastAll recipients content
 
@@ -62,7 +62,7 @@ broadcastAll (single:recipients) content = do
 onReceiveProposal :: SingleBlock -> Int -> ServerAction ()
 onReceiveProposal bNew pView = do 
     ServerState cViewOld bLock _ _ _ _ _ _ _ _ mempoolOld _ _<- get
-    ServerConfig myPid peers staticSignature _ _<- ask
+    ServerConfig myPid peers staticSignature _ _ _<- ask
     --let bNew = singleToFull bNewSingle bRecentOld 
     -- bRecent .= appendIfNotExists bNew bRecentOld
     bLeaf .= bNew
@@ -107,7 +107,7 @@ getLeader list v = list !! mod v (length list)
 
 onPropose :: ServerAction ()
 onPropose = do
-    ServerConfig myPid peers _ _ _ <- ask
+    ServerConfig myPid peers _ _ _ _ <- ask
     -- dummy random hash 
     let bound1 :: Int
         bound1 = maxBound
@@ -155,7 +155,7 @@ createBatch serverTickCount size = do
 onEcho :: ServerAction ()
 onEcho = do 
     ServerState _ _ _ bLeaf _ _ _ _ _ _ _ _ _<- get
-    ServerConfig myPid peers staticSignature _ _ <- ask
+    ServerConfig myPid peers staticSignature _ _ _ <- ask
     -- next view, reset timers for all peers
     ticksSinceSend .=0
     broadcastAll peers (EchoMsg {echoBlock = blockHashS bLeaf, sign = staticSignature})
@@ -164,7 +164,7 @@ onEcho = do
 onTally :: ServerAction ()
 onTally = do 
     ServerState _ _ _ bLeaf echoList _ _ _ ticksSinceSendOld _ _ _ _<- get
-    ServerConfig myPid peers staticSignature _ _ <- ask
+    ServerConfig myPid peers staticSignature _ _ _ <- ask
     -- next view, reset timers for all peers
     ticksSinceSend .=0
     broadcastAll peers (TallyMsg {tallyBlock = blockHashS bLeaf, tallyNumber = length echoList, sign = staticSignature})
@@ -173,7 +173,7 @@ onTally = do
 onVote :: ServerAction ()
 onVote = do 
     ServerState _ _ _ bLeaf _ _ _ _ ticksSinceSendOld _ _ _ _<- get
-    ServerConfig myPid peers staticSignature _ _ <- ask
+    ServerConfig myPid peers staticSignature _ _ _ <- ask
     -- next view, reset timers for all peers
     ticksSinceSend .=0
     broadcastAll peers (VoteMsg {voteBlock = blockHashS bLeaf, sign = staticSignature})
@@ -182,7 +182,7 @@ onVote = do
 onDecide :: ServerAction ()
 onDecide = do 
     ServerState _ _ bExecOld bLeaf _ _ _ _ ticksSinceSendOld _ _ _ _<- get
-    ServerConfig myPid peers staticSignature _ _ <- ask
+    ServerConfig myPid peers staticSignature _ _ _ <- ask
     -- next view, reset timers for all peers
     ticksSinceSend .=0
     execute bLeaf
@@ -194,7 +194,7 @@ onDecide = do
  -- confirm delivery to all clients and servers
 execute :: SingleBlock -> ServerAction ()
 execute b = do 
-    ServerConfig _ _ _ _ clients<- ask
+    ServerConfig _ _ _ _ _ clients<- ask
     ServerState _ _ _ _ _ _ _ _ _ _ mempoolOld _ tick<- get
     let cmds = V.fromList $ map (setDeliverTime tick) (V.toList $ contentS b)
     --mempool .= filter (`notElem` cmds) mempoolOld

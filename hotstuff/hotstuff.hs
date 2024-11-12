@@ -32,7 +32,8 @@ import Control.Distributed.Process.Backend.SimpleLocalnet
 import Control.Distributed.Static hiding (initRemoteTable)
 
 import System.Environment
-import System.IO (hFlush, stdout) -- Add this import
+import System.IO (hFlush, stdout)
+import Data.Time.Clock.POSIX (getPOSIXTime, POSIXTime)
 
 import Network.Socket (shutdown)
 
@@ -47,13 +48,16 @@ import ConsensusLogic
 import ConsensusDataTypes
 
 -- onBeat equivalent
-tickServerHandler :: Tick -> ServerAction ()
-tickServerHandler Tick = do
-    ServerConfig myPid peers _ timeout _ <- ask
-    ServerState _ cView _ _ bLeaf _ _ voteList ticksSinceMsgOld _ _ _<- get
-    --increment ticks for every peer
-    ticksSinceMsg .= Map.map (+1) ticksSinceMsgOld
-    serverTickCount += 1
+tickServerHandler :: ServerTick -> ServerAction ()
+tickServerHandler (ServerTick tickTime) = do
+    ServerConfig myPid peers _ timeout timePerTick _ <- ask
+    ServerState _ cView _ _ bLeaf _ _ voteList ticksSinceMsgOld _ timerOld _ _<- get
+    --increment ticks
+    timerPosix .= tickTime
+    let elapsedTime = (tickTime - timerOld) *10^6
+        elapsedTicks = round (elapsedTime / fromIntegral timePerTick)
+    ticksSinceMsg .= Map.map (+elapsedTicks) ticksSinceMsgOld
+    serverTickCount += elapsedTicks
 
     let leader = getLeader peers cView
         quorum = 2 * div (length peers) 3 + 1
@@ -83,26 +87,32 @@ msgHandler (Message sender recipient (ProposeMsg bNew pView)) = do
     onReceiveProposal bNew pView
 msgHandler (Message sender recipient (VoteMsg b sign)) = do
     --handle vote
-    ServerConfig myPid peers _ _ _<- ask
+    ServerConfig myPid peers _ _ _ _<- ask
     onReceiveVote b sign
 msgHandler (Message sender recipient (NewViewMsg qc view sign)) = do
     --handle new view message
     onReceiveNewView view qc sign
 
 --Client behavior
---continuously send commands from client to all servers
-tickClientHandler :: Tick -> ClientAction ()
-tickClientHandler Tick = do
-    ServerConfig myPid peers _ _ _ <- ask
-    ClientState _ _ lastDeliveredOld lastHeight _ cmdRate tick <- get
-    -- let n = 1
-    --sendIndividualCommands cmdRate tick peers
-    -- sendNCommands n tick peers
-    -- sentCount += n
-    tickCount += 1
-    if V.length lastDeliveredOld > cmdRate
-        then lastDelivered .= V.drop ((V.length lastDeliveredOld) - cmdRate) lastDeliveredOld
+tickClientHandler :: ClientTick -> ClientAction ()
+tickClientHandler (ClientTick tickTime) = do
+    ServerConfig myPid peers _ _ timePerTick _ <- ask
+    ClientState _ _ lastDeliveredOld currLatencyOld _ cmdRate timeOld tick <- get
+    timerPosixCli .= tickTime
+    let elapsedTime = (tickTime - timeOld) *10^6
+        elapsedTicks = elapsedTime / fromIntegral timePerTick
+    tickCount += round elapsedTicks
+
+    if lastDeliveredOld /= V.fromList []
+        then do
+            currLatency .= meanTickDifference lastDeliveredOld tick
+            -- currLatency .= elapsedTicks
+            lastDelivered .= V.fromList []
         else return ()
+
+    -- if V.length lastDeliveredOld > cmdRate
+    --     then lastDelivered .= V.drop ((V.length lastDeliveredOld) - cmdRate) lastDeliveredOld
+    --     else return ()
 
 -- sendNCommands :: Int -> Int -> [ProcessId] -> ClientAction ()
 -- sendNCommands 0 _ _ = return ()
@@ -121,7 +131,7 @@ tickClientHandler Tick = do
 msgHandlerCli :: Message -> ClientAction ()
 --record delivered commands
 msgHandlerCli (Message sender recipient (DeliverMsg deliverH deliverCmds)) = do
-    ClientState _ _ lastDeliveredOld lastHeight _ _ _<- get
+    ClientState _ _ lastDeliveredOld lastHeight _ _ _ _<- get
     let action
             -- | lastHeight < deliverH = do rHeight += 1
             --                              deliveredCount += V.length deliverCmds
@@ -185,8 +195,8 @@ runServer config state = do
                                 --say $ "bRecent: " ++ show (_bRecent state) ++ "\n"
                                 say $ "Sending Messages : "  ++ show outputMessages ++ "\n"
                                 -- say $ "Current leader: " ++ show leader ++ " current view: " ++ show (_cView state) ++ "\n"
-    prints
-    let latency = 1*10^5
+    -- prints
+    let latency = 0*10^3
     let memoryPrints = do --say $ "Length of bRecent : " ++ show (length $ _bRecent state' ) ++ "\n"
                         --   say $ "Size of bRecent : " ++ show (getSizeInBytes $ _bRecent state' ) ++ "\n"
                           say $ show (getSizeInBytes $ outputMessages) ++ "\n"
@@ -194,7 +204,7 @@ runServer config state = do
                           --say $ "Length of mempool : " ++ show (length $ _mempool state' ) ++ "\n"
                           
     --memoryPrints
-    -- liftIO $ threadDelay (1000)
+    liftIO $ threadDelay (1000)
     mapM (\msg -> sendWithDelay latency (recipientOf msg) msg) outputMessages
 
     runServer config state''
@@ -209,8 +219,8 @@ lastXElements x vec = V.take x (V.drop (V.length vec - x) vec)
 
 meanTickDifference :: V.Vector Command -> Int -> Double
 meanTickDifference commands tick =
-    let differences = map (\cmd -> fromIntegral (tick - proposeTime cmd)) (V.toList commands)
-    -- let differences = map (\cmd -> fromIntegral (deliverTime cmd - proposeTime cmd)) (V.toList commands)
+    -- let differences = map (\cmd -> fromIntegral (tick - proposeTime cmd)) (V.toList commands)
+    let differences = map (\cmd -> fromIntegral (deliverTime cmd - proposeTime cmd)) (V.toList commands)
         total = sum differences
         count = length differences
     in if count == 0 then 0 else total / fromIntegral count
@@ -250,15 +260,19 @@ spawnServer batchSize clientPid = spawnLocal $ do
 
     serverPids <- expect
     say $ "received servers " ++ show serverPids
-    let tickTime = 1*10^5
+    let tickTime = 1*10^3
         timeoutMicroSeconds = 10*10^5
         timeoutTicks = timeoutMicroSeconds `div` tickTime
     say $ "synchronous delta timers set to " ++ show timeoutTicks ++ " ticks"
     spawnLocal $ forever $ do
         liftIO $ threadDelay tickTime
-        send myPid Tick
+        currentTime <- liftIO getPOSIXTime
+        let timeDouble = realToFrac currentTime
+        send myPid (ServerTick timeDouble)
     randomGen <- liftIO newStdGen
-    runServer (ServerConfig myPid serverPids (Signature (show randomGen)) timeoutTicks [clientPid]) (ServerState 0 0 genesisBlockSingle genesisBlockSingle genesisBlockSingle [genesisBlockSingle] genesisQC Map.empty (Map.fromList [(key, 0) | key <- serverPids]) batchSize 0 randomGen)
+    timeInitPOSIX <- liftIO getPOSIXTime
+    let timeInit = realToFrac timeInitPOSIX
+    runServer (ServerConfig myPid serverPids (Signature (show randomGen)) timeoutTicks tickTime [clientPid]) (ServerState 0 0 genesisBlockSingle genesisBlockSingle genesisBlockSingle [genesisBlockSingle] genesisQC Map.empty (Map.fromList [(key, 0) | key <- serverPids]) batchSize timeInit 0 randomGen)
 
 
 spawnClient :: Int -> Int -> Int -> Int -> Process ProcessId
@@ -279,14 +293,16 @@ spawnClient batchSize nSlaves replicas crashCount = spawnLocal $ do
     mapM_ (`kill` "crash node") toCrashNodes
     say $ "sent crash command to " ++ show toCrashNodes
   
-    let tickTime = 1*10^5
-        timeoutMicroSeconds = 10*10^5
-        timeoutTicks = timeoutMicroSeconds `div` tickTime
+    let tickTime = 1*10^3
     spawnLocal $ forever $ do
         liftIO $ threadDelay tickTime
-        send clientPid Tick
+        currentTime <- liftIO getPOSIXTime
+        let timeDouble = realToFrac currentTime
+        send clientPid (ClientTick timeDouble)
     randomGen <- liftIO newStdGen
-    runClient (ServerConfig clientPid otherPids (Signature (show randomGen)) timeoutTicks [clientPid]) (ClientState 0 0 (V.fromList []) 0 randomGen batchSize 0)
+    timeInitPOSIX <- liftIO getPOSIXTime
+    let timeInit = realToFrac timeInitPOSIX
+    runClient (ServerConfig clientPid otherPids (Signature (show randomGen)) 0 tickTime [clientPid]) (ClientState 0 0 (V.fromList []) 0 randomGen batchSize timeInit 0)
 
 
 spawnAll :: (ProcessId, Int, Int) -> Process ()

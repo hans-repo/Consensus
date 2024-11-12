@@ -72,7 +72,10 @@ data MessageType = CommandMsg Command | DeliverMsg {deliverHeight :: Int, delive
 data Message = Message {senderOf :: ProcessId, recipientOf :: ProcessId, msg :: MessageType}
                deriving (Show, Generic, Typeable)
 
-data Tick = Tick deriving (Show, Generic, Typeable, Eq)
+data ServerTick = ServerTick Double deriving (Show, Generic, Typeable, Eq)
+
+data ClientTick = ClientTick Double deriving (Show, Generic, Typeable, Eq)
+
 
 instance Binary Signature
 instance Binary BlockHash
@@ -117,7 +120,8 @@ instance Binary MessageType where
             2 -> ProposeMsg <$> get <*> get
             _ -> fail "Invalid MessageType tag"
 instance Binary Message
-instance Binary Tick
+instance Binary ServerTick
+instance Binary ClientTick
 
 data ClientState = ClientState {
     _sentCount :: !Int, --number of sent commands
@@ -126,6 +130,7 @@ data ClientState = ClientState {
     _currLatency :: !Double, --height of last received confirmed block
     _randomGenCli :: !StdGen, --last random number generation
     _clientBatchSize :: !Int, ----size of delivered batches, same as server batchSize
+    _timerPosixCli :: Double, --last timer in POSIX double
     _tickCount :: !Int --tick counter
 } deriving (Show, Eq)
 makeLenses ''ClientState
@@ -137,7 +142,8 @@ data ServerState = ServerState {
     _dagRecent :: ![SingleBlock], -- unconfirmed DAG. List of  highest height received blocks only
     --_heightsMap :: !(Map.Map Int [SingleBlock]), --mapping heights to blocks. SingleBlock to avoid containing whole DAG.
     _ticksSinceSend :: !Int, --time ticks since last broadcast, used as timer
-    _mempool :: ![Command], --list of unconfirmed commands
+    _timerPosix :: !Double, --last timer in POSIX double
+    -- _mempool :: ![Command], --list of unconfirmed commands
     _batchSize :: !Int, --number of commands per block
     _randomGen :: !StdGen, --last random number generation
     _serverTickCount :: !Int --tick counter
@@ -148,7 +154,8 @@ data ServerConfig = ServerConfig {
     myId  :: ProcessId, --id of server
     peers :: [ProcessId], --list of server peers
     staticSignature :: Signature, --placeholder cryptographic signature
-    timeout :: Int, --number of ticks for next communication step
+    timeout :: Int, --number of ticks to trigger Delta
+    timePerTick :: Int, --number of microseconds per tick
     clients :: [ProcessId] --list of clients
 } deriving (Show)
 

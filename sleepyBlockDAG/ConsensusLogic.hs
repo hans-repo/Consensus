@@ -49,10 +49,10 @@ findBlockDepth h b | h == blockHash b = b
 -- Broadcasting
 broadcastAll :: [ProcessId] -> MessageType -> ServerAction ()
 broadcastAll [single] content = do
-    ServerConfig myId _ _ _ _<- ask
+    ServerConfig myId _ _ _ _ _<- ask
     tell [Message myId single content]
 broadcastAll (single:recipients) content = do
-    ServerConfig myId _ _ _ _<- ask
+    ServerConfig myId _ _ _ _ _<- ask
     tell [Message myId single content]
     broadcastAll recipients content
 
@@ -72,37 +72,37 @@ appendIfNotExists x xs
   | x `elem` xs = xs  -- Element already exists, return the original list
   | otherwise   = x : xs  -- Append the element to the list
 
-addNMempool :: Int -> ServerAction ()
-addNMempool 0 = return ()
-addNMempool n = do
-    ServerState _ _ _ _ _ mempoolOld _ _ serverTickCount <- get
-    let bound1 :: Int
-        bound1 = maxBound
-    command <- randomWithin (0, bound1)
-    let commandString = show command
-        newCmd = Command {cmdId = commandString, deliverTime = serverTickCount, proposeTime = 0}
-    mempool .= newCmd:mempoolOld
-    addNMempool (n-1)
+-- addNMempool :: Int -> ServerAction ()
+-- addNMempool 0 = return ()
+-- addNMempool n = do
+--     ServerState _ _ _ _ _ mempoolOld _ _ serverTickCount <- get
+--     let bound1 :: Int
+--         bound1 = maxBound
+--     command <- randomWithin (0, bound1)
+--     let commandString = show command
+--         newCmd = Command {cmdId = commandString, deliverTime = serverTickCount, proposeTime = 0}
+--     mempool .= newCmd:mempoolOld
+--     addNMempool (n-1)
 
 {-# SCC onReceiveProposal #-}
 onReceiveProposal :: SingleBlock -> Int -> ServerAction ()
 onReceiveProposal bNewSingle pView = do 
-    ServerState _ _ _ dagRecentOld _ mempoolOld _ _ _<- get
-    ServerConfig myPid peers staticSignature _ _<- ask
+    ServerState _ _ _ dagRecentOld _ mempoolOld _ _ _ <- get
+    ServerConfig myPid peers staticSignature _ _ _ <- ask
  --   let parentsBlocks = map (\x -> findBlock x dagRecentOld) $ parentS bNewSingle
  --       bNew = Block {content = contentS bNewSingle, height = heightS bNewSingle, blockHash = blockHashS bNewSingle, parent = parentsBlocks}
     let dagRecentNew = appendIfNotExists bNewSingle dagRecentOld
         --sameHeight = findBlocksHeight (heightS bNewSingle) [] dagRecentOld                           
     dagRecent .= dagRecentNew
-    mempool .= filter (`notElem` contentS bNewSingle) mempoolOld
-
+    -- mempool .= filter (`notElem` contentS bNewSingle) mempoolOld
+    
 getLeader :: [ProcessId] -> Int -> ProcessId
 getLeader list v = list !! mod v (length list)
 
 {-# SCC onPropose #-}
 onPropose :: ServerAction ()
 onPropose = do
-    ServerConfig myPid peers _ _ _ <- ask
+    ServerConfig myPid peers _ _ _ _ <- ask
     -- dummy random hash 
     let bound1 :: Int
         bound1 = maxBound
@@ -165,7 +165,7 @@ createBatch serverTickCount size = do
 onDecide :: ServerAction ()
 onDecide = do 
     ServerState cHeightOld _ dagFinOld dagRecentOld _ _ _ _ _<- get
-    ServerConfig myPid peers staticSignature _ _ <- ask
+    ServerConfig myPid peers staticSignature _ _ _<- ask
     -- let finBlocksSingle = getBlocksFromHeight heightsMap $ abs (cHeightOld - 2)
     -- let finBlocks = map (\x -> singleToFull x dagRecentOld) finBlocksSingle
     let heightToFin = max 0  (cHeightOld - 3)
@@ -180,10 +180,10 @@ onDecide = do
 execute :: [SingleBlock] -> ServerAction ()
 execute [] = do return ()
 execute (b:bs) = do 
-    ServerConfig _ _ _ _ clients<- ask
-    ServerState _ _ _ _ _ mempoolOld _ _ tick<- get
+    ServerConfig _ _ _ _ _ clients<- ask
+    ServerState _ _ _ _ _ _ _ _ tick<- get
     let cmds = V.fromList $ map (setDeliverTime tick) (V.toList $ contentS b)
-    mempool .= filter (`notElem` cmds) mempoolOld
+    -- mempool .= filter (`notElem` cmds) mempoolOld
     -- dagFin .= appendIfNotExists b dagFinOld
     broadcastAll clients (DeliverMsg {deliverCommands = cmds, deliverHeight = heightS b})
     execute bs

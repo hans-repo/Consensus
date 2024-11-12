@@ -22,10 +22,10 @@ appendIfNotExists x xs
 
 broadcastAll :: [ProcessId] -> MessageType -> ServerAction ()
 broadcastAll [single] content = do
-    ServerConfig myId _ _ _ _<- ask
+    ServerConfig myId _ _ _ _ _<- ask
     tell [Message myId single content]
 broadcastAll (single:recipients) content = do
-    ServerConfig myId _ _ _ _<- ask
+    ServerConfig myId _ _ _ _ _<- ask
     tell [Message myId single content]
     broadcastAll recipients content
 
@@ -57,31 +57,31 @@ commonSubset (x:xs) = foldl1 intersect (x:xs)
 
 onPropose :: ServerAction ()
 onPropose = do
-    ServerConfig myPid peers _ _ _ <- ask
-    ServerState _ proposeListOld _ _ tick <- get
+    ServerConfig myPid peers _ _ _ _ <- ask
+    ServerState _ proposeListOld _ _ _ tick <- get
     let myList = map show [1, 2, 3, 4, 5, 6, 7, 8, 9, 10]
     x <- randomWithin (8, 9)  -- Randomly select between a and b elements
     dag <- selectRandomElements x myList
-    let proposal = DagInput {dag = dag, proposeTime = tick}
+    let proposal = DagInput {dag = dag, deliverTime = 0, proposeTime = tick}
     broadcastAll peers (ProposeMsg {proposal = proposal})
     phase .= "vote"
 
 onVote :: ServerAction ()
 onVote = do 
-    ServerConfig myPid peers _ _ _ <- ask
-    ServerState _ proposeListOld _ _ _ <- get
+    ServerConfig myPid peers _ _ _ _ <- ask
+    ServerState _ proposeListOld _ _ _ _<- get
     let voteDag = commonSubset $ map dag proposeListOld
-        vote = DagInput {dag = voteDag, proposeTime = proposeTime (head proposeListOld)}
+        vote = DagInput {dag = voteDag, deliverTime = 0, proposeTime = proposeTime (head proposeListOld)}
     broadcastAll peers (VoteMsg {vote = vote, proposes = proposeListOld})
     proposeList .= []
     phase .= "decide"
 
 onDecide :: ServerAction ()
 onDecide = do 
-    ServerState _ _ voteListOld _ _<- get
-    ServerConfig myPid _ _ _ clients <- ask
+    ServerState _ _ voteListOld _ _ tick<- get
+    ServerConfig myPid _ _ _ _ clients <- ask
     let decideDag = commonSubset $ map dag voteListOld
-        decide = DagInput {dag = decideDag, proposeTime = proposeTime (head voteListOld)}
+        decide = DagInput {dag = decideDag, deliverTime = tick, proposeTime = proposeTime (head voteListOld)}
     broadcastAll clients (DeliverMsg {deliverCommands = decide, tickLatency = proposeTime (head voteListOld)})
     voteList .= []
     phase .= "propose"
@@ -89,10 +89,10 @@ onDecide = do
 
 onReceiveProposal :: DagInput -> ServerAction ()
 onReceiveProposal dag = do 
-    ServerState _ proposeListOld _ _ _ <- get
+    ServerState _ proposeListOld _ _ _ _ <- get
     proposeList .= dag:proposeListOld
 
 onReceiveVote :: DagInput -> ServerAction ()
 onReceiveVote dag = do
-    ServerState _ _ voteListOld _ _ <- get
+    ServerState _ _ voteListOld _ _ _  <- get
     voteList .= dag:voteListOld

@@ -88,7 +88,10 @@ data MessageType = CommandMsg Command | DeliverMsg {deliverHeight :: Int, delive
 data Message = Message {senderOf :: ProcessId, recipientOf :: ProcessId, msg :: MessageType}
                deriving (Show, Generic, Typeable)
 
-data Tick = Tick deriving (Show, Generic, Typeable, Eq)
+data ServerTick = ServerTick Double deriving (Show, Generic, Typeable, Eq)
+
+data ClientTick = ClientTick Double deriving (Show, Generic, Typeable, Eq)
+
 
 instance Binary Signature
 instance Binary BlockHash
@@ -147,15 +150,17 @@ instance Binary MessageType where
             5 -> VoteMsg <$> get <*> get
             _ -> fail "Invalid MessageType tag"
 instance Binary Message
-instance Binary Tick
+instance Binary ServerTick
+instance Binary ClientTick
 
 data ClientState = ClientState {
     _sentCount :: !Int, --number of sent commands
     _deliveredCount :: !Int, --number of delivered commands
     _lastDelivered :: !(V.Vector Command), --last batch of delivered commands
-    _rHeight :: !Int, --height of last received confirmed block
+    _currLatency :: !Double, --height of last received confirmed block
     _randomGenCli :: !StdGen, --last random number generation
-    _clientBatchSize :: !Int, --size of delivered batches, same as server batchSize
+    _clientBatchSize :: !Int, ----size of delivered batches, same as server batchSize
+    _timerPosixCli :: Double, --last timer in POSIX double
     _tickCount :: !Int --tick counter
 } deriving (Show, Eq)
 makeLenses ''ClientState
@@ -172,6 +177,7 @@ data ServerState = ServerState {
     _voteList :: !(Map.Map BlockHash [Signature]), --list of received votes
     _ticksSinceMsg :: !(Map.Map ProcessId Int), --time ticks since receiving a message, used as timer
     _batchSize :: !Int, --number of commands per block
+    _timerPosix :: !Double, --last timer in POSIX double
     _serverTickCount :: !Int, --tick count since start
     _randomGen :: !StdGen --last random number generation
 } deriving (Show)
@@ -182,6 +188,7 @@ data ServerConfig = ServerConfig {
     peers :: [ProcessId], --list of server peers
     staticSignature :: Signature, --placeholder cryptographic signature
     timeout :: Int, --number of ticks to timeout
+    timePerTick :: Int, --number of microseconds per tick
     clients :: [ProcessId] --list of clients
 } deriving (Show)
 

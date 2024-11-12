@@ -27,6 +27,8 @@ import Control.Distributed.Static hiding (initRemoteTable)
 
 import System.Environment
 import System.IO (hFlush, stdout) -- Add this import
+import Data.Time.Clock.POSIX (getPOSIXTime, POSIXTime)
+
 
 import Network.Socket (shutdown)
 
@@ -43,10 +45,15 @@ import ConsensusDataTypes
 
 
 -- onBeat equivalent
-tickServerHandler :: Tick -> ServerAction ()
-tickServerHandler Tick = do
-    ServerConfig myPid peers _ _ _ <- ask
-    ServerState phase proposeList voteList _ _<- get
+tickServerHandler :: ServerTick -> ServerAction ()
+tickServerHandler (ServerTick tickTime) = do
+    ServerConfig myPid peers _ _ timePerTick _ <- ask
+    ServerState phase proposeList voteList timerOld _ _<- get
+    --increment ticks
+    timerPosix .= tickTime
+    let elapsedTime = (tickTime - timerOld) *10^6
+        elapsedTicks = elapsedTime / fromIntegral timePerTick
+    serverTickCount += round elapsedTicks
 
     let quorum = 2 * div (length peers) 3 + 1
     let actionNextStep
@@ -55,7 +62,8 @@ tickServerHandler Tick = do
             | length voteList >= quorum = onDecide
             | otherwise = return ()
     actionNextStep
-    serverTickCount += 1
+
+
 
 -- Handle all types of messages
 -- CommandMsg from client, ProposeMsg from leader, VoteMsg
@@ -71,19 +79,28 @@ msgHandler (Message sender recipient (VoteMsg dag proposeList)) = do
 
 --Client behavior
 --continuously send commands from client to all servers
-tickClientHandler :: Tick -> ClientAction ()
-tickClientHandler Tick = do
-    ServerConfig myPid peers _ _ _ <- ask
-    ClientState _ _ lastDeliveredOld lastHeight _ cmdRate tick <- get
-    tickCount += 1
-    if V.length lastDeliveredOld > 1
-        then lastDelivered .= V.drop ((V.length lastDeliveredOld) - cmdRate) lastDeliveredOld
+tickClientHandler :: ClientTick -> ClientAction ()
+tickClientHandler (ClientTick tickTime) = do
+    ServerConfig myPid peers _ _ timePerTick _<- ask
+    ClientState _ _ lastDeliveredOld lastHeight _ cmdRate timerOld tick <- get
+
+    timerPosixCli .= tickTime
+    let elapsedTime = (tickTime - timerOld) *10^6
+        elapsedTicks = elapsedTime / fromIntegral timePerTick
+    tickCount += round elapsedTicks
+
+    if lastDeliveredOld /= V.fromList []
+        then do
+            currLatency .= meanTickDifference lastDeliveredOld tick
+            -- currLatency .= elapsedTicks
+            lastDelivered .= V.fromList []
         else return ()
+
 
 msgHandlerCli :: Message -> ClientAction ()
 --record delivered commands
 msgHandlerCli (Message sender recipient (DeliverMsg deliverTick deliverCmds)) = do
-    ClientState _ _ lastDeliveredOld lastHeight _ _ ticks<- get
+    ClientState _ _ lastDeliveredOld lastHeight _ _ _ ticks<- get
     let action
             | not $ isSubset (V.fromList [deliverCmds]) lastDeliveredOld = do deliveredCount += 1
                                                                               lastDelivered .= lastDeliveredOld V.++ (V.fromList [deliverCmds])
@@ -153,8 +170,8 @@ lastXElements x vec = V.take x (V.drop (V.length vec - x) vec)
 
 meanTickDifference :: V.Vector DagInput -> Int -> Double
 meanTickDifference commands tick =
-    let differences = map (\cmd -> fromIntegral (tick - proposeTime cmd)) (V.toList commands)
-    -- let differences = map (\cmd -> fromIntegral (deliverTime cmd - proposeTime cmd)) (V.toList commands)
+    -- let differences = map (\cmd -> fromIntegral (tick - proposeTime cmd)) (V.toList commands)
+    let differences = map (\cmd -> fromIntegral (deliverTime cmd - proposeTime cmd)) (V.toList commands)
         total = sum differences
         count = length differences
     in if count == 0 then 0 else total / fromIntegral count
@@ -192,15 +209,19 @@ spawnServer batchSize clientPid = spawnLocal $ do
 
     serverPids <- expect
     say $ "received servers " ++ show serverPids
-    let tickTime = 1*10^5
+    let tickTime = 1*10^3
         timeoutMicroSeconds = 10*10^5
         timeoutTicks = timeoutMicroSeconds `div` tickTime
     say $ "synchronous delta timers set to " ++ show timeoutTicks ++ " ticks"
     spawnLocal $ forever $ do
         liftIO $ threadDelay tickTime
-        send myPid Tick
+        currentTime <- liftIO getPOSIXTime
+        let timeDouble = realToFrac currentTime
+        send myPid (ServerTick timeDouble)
     randomGen <- liftIO newStdGen
-    runServer (ServerConfig myPid serverPids (Signature (show randomGen)) timeoutTicks [clientPid]) (ServerState "propose" [] [] randomGen 0)
+    timeInitPOSIX <- liftIO getPOSIXTime
+    let timeInit = realToFrac timeInitPOSIX
+    runServer (ServerConfig myPid serverPids (Signature (show randomGen)) timeoutTicks tickTime [clientPid]) (ServerState "propose" [] [] timeInit randomGen 0)
 
 
 spawnClient :: Int -> Int -> Int -> Int -> Process ProcessId
@@ -221,14 +242,18 @@ spawnClient batchSize nSlaves replicas crashCount = spawnLocal $ do
     mapM_ (`kill` "crash node") toCrashNodes
     say $ "sent crash command to " ++ show toCrashNodes
   
-    let tickTime = 1*10^5
+    let tickTime = 1*10^3
         timeoutMicroSeconds = 10*10^5
         timeoutTicks = timeoutMicroSeconds `div` tickTime
     spawnLocal $ forever $ do
         liftIO $ threadDelay tickTime
-        send clientPid Tick
+        currentTime <- liftIO getPOSIXTime
+        let timeDouble = realToFrac currentTime
+        send clientPid (ClientTick timeDouble)
     randomGen <- liftIO newStdGen
-    runClient (ServerConfig clientPid otherPids (Signature (show randomGen)) timeoutTicks [clientPid]) (ClientState 0 0 (V.fromList []) 0 randomGen batchSize 0 )
+    timeInitPOSIX <- liftIO getPOSIXTime
+    let timeInit = realToFrac timeInitPOSIX
+    runClient (ServerConfig clientPid otherPids (Signature (show randomGen)) timeoutTicks tickTime [clientPid]) (ClientState 0 0 (V.fromList []) 0 randomGen batchSize timeInit 0 )
 
 
 spawnAll :: (ProcessId, Int, Int) -> Process ()
@@ -259,7 +284,6 @@ master backend replicas crashCount time batchSize peers= do
 main :: IO ()
 main = do
   let rtable = Main.__remoteTable initRemoteTable
-  hFlush stdout -- Ensure the output is flushed
   Options host port masterorslave replicas crashes time batchSize <- parseOptions
   backend <- initializeBackend host port rtable
   case masterorslave of

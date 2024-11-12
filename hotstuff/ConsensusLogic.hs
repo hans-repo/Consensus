@@ -41,10 +41,10 @@ appendIfNotExists x xs
   -- Broadcasting
 broadcastAll :: [ProcessId] -> MessageType -> ServerAction ()
 broadcastAll [single] content = do
-    ServerConfig myId _ _ _ _<- ask
+    ServerConfig myId _ _ _ _ _<- ask
     tell [Message myId single content]
 broadcastAll (single:recipients) content = do
-    ServerConfig myId _ _ _ _<- ask
+    ServerConfig myId _ _ _ _ _<- ask
     tell [Message myId single content]
     broadcastAll recipients content
 
@@ -57,12 +57,12 @@ sendSingle myId single content = do
 -- Event driven Hotstuff
 onPropose :: ServerAction ()
 onPropose = do
-    ServerConfig myPid peers _ _ _ <- ask
+    ServerConfig myPid peers _ _ _ _<- ask
     -- dummy random hash 
     let bound1 :: Int
         bound1 = maxBound
     hash <- randomWithin (0, bound1)
-    ServerState _ cView bLock _ bLeafOld bRecentOld qcHigh _ _ batchSize serverTickCount _ <- get
+    ServerState _ cView bLock _ bLeafOld bRecentOld qcHigh _ _ batchSize _ serverTickCount _ <- get
     mempoolBlock <- createBatch serverTickCount batchSize
     let singleBlock = SingleBlock {contentS = mempoolBlock, qcS = qcHigh, heightS = cView + 1, blockHashS = BlockHash (show hash), parentS = [blockHashS bLeafOld]}
     bLeaf .= singleBlock
@@ -82,8 +82,8 @@ createBatch serverTickCount size = do
 
 onReceiveProposal :: SingleBlock -> Int -> ServerAction ()
 onReceiveProposal bNew pView = do 
-    ServerState vHeightOld cViewOld bLock _ _ bRecentOld _ _ _ _ _ _<- get
-    ServerConfig myPid peers staticSignature _ _<- ask
+    ServerState vHeightOld cViewOld bLock _ _ bRecentOld _ _ _ _ _ _ _<- get
+    ServerConfig myPid peers staticSignature _ _ _<- ask
     let action | (heightS bNew > vHeightOld) && ( hash (qcS bNew) == blockHashS bLock || heightS bNew > heightS bLock) = do
                                 -- next view, reset timers for all peers
                                 cView += 1
@@ -98,14 +98,14 @@ onReceiveProposal bNew pView = do
 
 onReceiveVote :: BlockHash -> Signature -> ServerAction ()
 onReceiveVote bNewHash sign = do 
-    ServerState _ _ _ _ _ bRecent _ voteListOld _ _ _ _<- get
+    ServerState _ _ _ _ _ bRecent _ voteListOld _ _ _ _ _<- get
     let bNew = findBlock bNewHash bRecent
         votesB = fromMaybe [] (Map.lookup (blockHashS bNew) voteListOld)
     let actionAddToList | sign `elem` votesB = return ()
                         | otherwise = do voteList .= Map.insertWith (++) (blockHashS bNew) [sign] voteListOld                              
     actionAddToList
     -- get state again for the new voteList
-    ServerState _ _ _ _ _ _ _ voteListNew ticksSinceMsg _ _ _<- get
+    ServerState _ _ _ _ _ _ _ voteListNew ticksSinceMsg _ _ _ _<- get
     let votesBNew = fromMaybe [] (Map.lookup (blockHashS bNew) voteListNew)
         quorum = 2 * div (Map.size ticksSinceMsg) 3 + 1
     let action  | length votesBNew >= quorum = do updateQCHigh $ QC {signatures = votesBNew, hash = bNewHash}
@@ -122,14 +122,19 @@ onCommit bExec b = do
  -- confirm delivery to all clients and servers
 execute :: Int -> V.Vector Command -> ServerAction ()
 execute height cmds = do 
-    ServerConfig _ _ _ _ clients<- ask
-    broadcastAll clients (DeliverMsg {deliverCommands = cmds, deliverHeight = height})
-    
+    ServerState _ _ _ _ _ _ _ _ _ _ _ tick _<- get
+    ServerConfig _ _ _ _ _ clients<- ask
+    let toDeliverCmds = V.fromList $ map (setDeliverTime tick) (V.toList cmds)
+    broadcastAll clients (DeliverMsg {deliverCommands = toDeliverCmds, deliverHeight = height})
+
+setDeliverTime :: Int -> Command -> Command
+setDeliverTime tickCount cmd = Command {cmdId = cmdId cmd, deliverTime = tickCount, proposeTime = proposeTime cmd}
+
 
 --Need to input the latest block so that findBlock doesn't search from bLeaf which isn't updated yet
 updateQCHigh :: QC -> ServerAction ()
 updateQCHigh qc = do
-    ServerState _ _ _ _ _ bRecent qcHighOld _ _ _ _ _<- get
+    ServerState _ _ _ _ _ bRecent qcHighOld _ _ _ _ _ _<- get
     let qcNode = findBlock (hash qc) bRecent
         qcNodeOld = findBlock (hash qcHighOld) bRecent
         action  | heightS qcNode > heightS qcNodeOld = do qcHigh .= qc
@@ -139,7 +144,7 @@ updateQCHigh qc = do
 
 updateChain :: SingleBlock -> ServerAction ()
 updateChain bStar = do 
-    ServerState _ _ bLockOld bExecOld _ bRecent qcHigh _ _ _ _ _<- get
+    ServerState _ _ bLockOld bExecOld _ bRecent qcHigh _ _ _ _ _ _<- get
     updateQCHigh $ qcS bStar
     let b'' = findBlock (hash $ qcS bStar) bRecent
         b'  = findBlock (hash $ qcS b'') bRecent
@@ -161,8 +166,8 @@ getLeader list v = list !! mod v (length list)
 
 onNextSyncView :: ServerAction ()
 onNextSyncView = do 
-    ServerState _ cViewOld _ _ _ _ qcHigh _ _ _ _ _<- get
-    ServerConfig myPid peers staticSignature _ _<- ask
+    ServerState _ cViewOld _ _ _ _ qcHigh _ _ _ _ _ _<- get
+    ServerConfig myPid peers staticSignature _ _ _<- ask
     -- next view, reset timers for all peers
     cView += 1
     ticksSinceMsg .= Map.fromList [(key, 0) | key <- peers]
@@ -170,7 +175,7 @@ onNextSyncView = do
 
 onReceiveNewView :: Int -> QC -> Signature -> ServerAction ()
 onReceiveNewView view qc sign = do 
-    ServerState _ _ _ _ _ _ _ voteListOld ticksSinceMsg _ _ _<- get
+    ServerState _ _ _ _ _ _ _ voteListOld ticksSinceMsg _ _ _ _<- get
     let votes = voteListOld
         votesT = fromMaybe [] (Map.lookup (TimeoutView view) votes)
     let actionAddToList | sign `elem` votesT = return ()

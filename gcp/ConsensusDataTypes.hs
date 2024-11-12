@@ -42,7 +42,7 @@ import Control.Lens --(makeLenses, (+=), (%%=), use, view, (.=), (^.))
 -- data Command = Command {cmdId :: String, deliverTime :: Int, proposeTime :: Int}
 --     deriving (Show, Generic, Typeable, Eq)
 
-data DagInput = DagInput {dag :: [String], proposeTime :: Int }
+data DagInput = DagInput {dag :: [String], deliverTime :: Int, proposeTime :: Int }
     deriving (Show, Generic, Typeable, Eq)
 
 --hash of a block
@@ -77,7 +77,9 @@ data MessageType = DeliverMsg {tickLatency :: Int, deliverCommands :: DagInput} 
 data Message = Message {senderOf :: ProcessId, recipientOf :: ProcessId, msg :: MessageType}
                deriving (Show, Generic, Typeable)
 
-data Tick = Tick deriving (Show, Generic, Typeable, Eq)
+data ServerTick = ServerTick Double deriving (Show, Generic, Typeable, Eq)
+
+data ClientTick = ClientTick Double deriving (Show, Generic, Typeable, Eq)
 
 instance Binary DagInput
 instance Binary Signature
@@ -85,16 +87,18 @@ instance Binary BlockHash
 -- instance Binary Command
 instance Binary MessageType
 instance Binary Message
-instance Binary Tick
+instance Binary ServerTick
+instance Binary ClientTick
 
 data ClientState = ClientState {
-    _sentCount ::  Int, --number of sent commands
-    _deliveredCount ::  Int, --number of delivered commands
-    _lastDelivered ::  (V.Vector DagInput), --last batch of delivered commands
-    _rHeight :: Int, --height of last received confirmed block
-    _randomGenCli :: StdGen, --last random number generation
-    _clientBatchSize :: Int, --size of delivered batches, same as server batchSize
-    _tickCount :: Int --tick counter since decision received
+    _sentCount :: !Int, --number of sent commands
+    _deliveredCount :: !Int, --number of delivered commands
+    _lastDelivered :: !(V.Vector DagInput), --last batch of delivered commands
+    _currLatency :: !Double, --height of last received confirmed block
+    _randomGenCli :: !StdGen, --last random number generation
+    _clientBatchSize :: !Int, ----size of delivered batches, same as server batchSize
+    _timerPosixCli :: Double, --last timer in POSIX double
+    _tickCount :: !Int --tick counter
 } deriving (Show, Eq)
 makeLenses ''ClientState
 
@@ -102,6 +106,7 @@ data ServerState = ServerState {
     _phase :: String,
     _proposeList :: [DagInput], --list of received proposals
     _voteList :: [DagInput], --list of received votes
+    _timerPosix :: !Double, --last timer in POSIX double
     _randomGen :: StdGen, --last random number generation
     _serverTickCount :: Int --tick counter
 } deriving (Show)
@@ -111,7 +116,8 @@ data ServerConfig = ServerConfig {
     myId  :: ProcessId, --id of server
     peers :: [ProcessId], --list of server peers
     staticSignature :: Signature, --placeholder cryptographic signature
-    timeout :: Int, --number of ticks for next communication step
+    timeout :: Int, --number of ticks to trigger Delta
+    timePerTick :: Int, --number of microseconds per tick
     clients :: [ProcessId] --list of clients
 } deriving (Show)
 
