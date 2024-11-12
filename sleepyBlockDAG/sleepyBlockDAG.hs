@@ -81,7 +81,7 @@ tickClientHandler Tick = do
     ClientState _ _ lastDeliveredOld currLatencyOld _ cmdRate tick <- get
     if lastDeliveredOld /= V.fromList []
         then do
-            currLatency .= round (meanTickDifference lastDeliveredOld tick)
+            currLatency .= meanTickDifference lastDeliveredOld tick
             lastDelivered .= V.fromList []
         else return ()
     tickCount += 1
@@ -217,8 +217,8 @@ runClient :: ServerConfig -> ClientState -> Process ()
 runClient config state = do
     let run handler msg = return $ execRWS (runClientAction $ handler msg) config state
     (state', outputMessages) <- receiveWait [
-            match $ run msgHandlerCli,
-            match $ run tickClientHandler]
+            match $ run tickClientHandler,
+            match $ run msgHandlerCli]
     let throughput = fromIntegral (_deliveredCount state') / fromIntegral (_tickCount state') 
         -- meanLatency = meanTickDifference (_lastDelivered state') (_tickCount state')
         -- meanLatency = meanTickDifference (lastXElements (_clientBatchSize state') (_lastDelivered state')) (_tickCount state')
