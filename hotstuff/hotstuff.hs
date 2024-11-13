@@ -219,8 +219,8 @@ lastXElements x vec = V.take x (V.drop (V.length vec - x) vec)
 
 meanTickDifference :: V.Vector Command -> Int -> Double
 meanTickDifference commands tick =
-    let differences = map (\cmd -> fromIntegral (tick - proposeTime cmd)) (V.toList commands)
-    -- let differences = map (\cmd -> fromIntegral (deliverTime cmd - proposeTime cmd)) (V.toList commands)
+    -- let differences = map (\cmd -> fromIntegral (tick - proposeTime cmd)) (V.toList commands)
+    let differences = map (\cmd -> fromIntegral (deliverTime cmd - proposeTime cmd)) (V.toList commands)
         total = sum differences
         count = length differences
     in if count == 0 then 0 else total / fromIntegral count
