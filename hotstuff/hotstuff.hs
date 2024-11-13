@@ -106,7 +106,7 @@ tickClientHandler (ClientTick tickTime) = do
             -- lastDelivered .= V.fromList []
         else return ()
     if V.length lastDeliveredOld > cmdRate
-        then lastDelivered .= V.drop ((V.length lastDeliveredOld) - cmdRate) lastDeliveredOld
+        then lastDelivered .= V.drop ((V.length lastDeliveredOld) - cmdRate*(length peers)) lastDeliveredOld
         else return ()
 
 -- sendNCommands :: Int -> Int -> [ProcessId] -> ClientAction ()
@@ -137,13 +137,13 @@ msgHandlerCli (Message sender recipient (DeliverMsg deliverH deliverCmds)) = do
             -- | otherwise = return ()
             | not $ isSubset deliverCmds lastDeliveredOld = do deliveredCount += V.length deliverCmds
                                                                lastDelivered .= lastDeliveredOld V.++ deliverCmds
-            | otherwise = return ()
+            | otherwise = lastDelivered .= lastDeliveredOld V.++ deliverCmds
     action
 
-isSubset :: (Eq a) => V.Vector a -> V.Vector a -> Bool
-isSubset smaller larger =
-    V.all (\x -> isJust $ V.find (== x) larger) smaller
-
+isSubset :: V.Vector Command -> V.Vector Command -> Bool
+isSubset smaller larger = V.all (`V.elem` largerIds) smallerIds
+    where smallerIds = V.map cmdId smaller
+          largerIds = V.map cmdId larger
 
 
 

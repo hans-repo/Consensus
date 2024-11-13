@@ -96,7 +96,7 @@ tickClientHandler (ClientTick tickTime) = do
             -- lastDelivered .= V.fromList []
         else return ()
     if V.length lastDeliveredOld > cmdRate
-        then lastDelivered .= V.drop ((V.length lastDeliveredOld) - cmdRate) lastDeliveredOld
+        then lastDelivered .= V.drop ((V.length lastDeliveredOld) - cmdRate*(length peers)) lastDeliveredOld
         else return ()
 
 
@@ -107,13 +107,13 @@ msgHandlerCli (Message sender recipient (DeliverMsg deliverTick deliverCmds)) = 
     let action
             | not $ isSubset (V.fromList [deliverCmds]) lastDeliveredOld = do deliveredCount += 1
                                                                               lastDelivered .= lastDeliveredOld V.++ (V.fromList [deliverCmds])
-            | otherwise = return ()
+            | otherwise = lastDelivered .= lastDeliveredOld V.++ (V.fromList [deliverCmds])
     action
 
-isSubset :: (Eq a) => V.Vector a -> V.Vector a -> Bool
-isSubset smaller larger =
-    V.all (\x -> isJust $ V.find (== x) larger) smaller
-
+isSubset :: V.Vector DagInput -> V.Vector DagInput -> Bool
+isSubset smaller larger = V.all (`V.elem` largerIds) smallerIds
+    where smallerIds = V.map dag smaller
+          largerIds = V.map dag larger
 
 
 
