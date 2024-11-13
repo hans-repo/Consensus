@@ -63,11 +63,11 @@ tickServerHandler (ServerTick tickTime) = do
     ServerConfig myPid peers _ timeout timePerTick _ <- ask
     ServerState  _ _ _ _ ticksSinceSendOld timerOld _ _ tickOld<- get
     --increment ticks
-    -- timerPosix .= tickTime
+    timerPosix .= tickTime
     let elapsedTime = (tickTime - timerOld) *10^6
         elapsedTicks = elapsedTime / fromIntegral timePerTick
-    ticksSinceSend += (round elapsedTicks)- tickOld
-    serverTickCount .= round elapsedTicks
+    ticksSinceSend += round elapsedTicks
+    serverTickCount += round elapsedTicks
 
     let leader = myPid
     let actionLead
@@ -111,7 +111,7 @@ tickClientHandler (ClientTick tickTime) = do
 
     if lastDeliveredOld /= V.fromList []
         then do
-            currLatency .= meanTickDifference lastDeliveredOld (round elapsedTicks)
+            currLatency .= (meanTickDifference lastDeliveredOld (round $ tickTime*10^6)) / 10^6
             -- currLatency .= elapsedTicks
             -- lastDelivered .= V.fromList []
         else return ()
@@ -119,10 +119,9 @@ tickClientHandler (ClientTick tickTime) = do
         then lastDelivered .= V.drop ((V.length lastDeliveredOld) - cmdRate*(length peers)) lastDeliveredOld
         else return ()
 
-
 meanTickDifference :: V.Vector Command -> Int -> Double
-meanTickDifference commands tick =
-    let differences = map (\cmd -> fromIntegral (tick - proposeTime cmd)) (V.toList commands)
+meanTickDifference commands time =
+    let differences = map (\cmd -> fromIntegral (time - (proposeTime cmd))) (V.toList commands)
     -- let differences = map (\cmd -> fromIntegral (deliverTime cmd - proposeTime cmd)) (V.toList commands)
         total = sum differences
         count = length differences

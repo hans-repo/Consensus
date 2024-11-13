@@ -53,7 +53,7 @@ tickServerHandler (ServerTick tickTime) = do
     ServerConfig myPid peers _ timeout timePerTick _ <- ask
     ServerState _ cView _ _ bLeaf _ _ voteList ticksSinceMsgOld _ timerOld tickOld _<- get
     --increment ticks
-    -- timerPosix .= tickTime
+    timerPosix .= tickTime
     let elapsedTime = (tickTime - timerOld) *10^6
         elapsedTicks = round (elapsedTime / fromIntegral timePerTick)
         elapsedTicksSinceSend = elapsedTicks- tickOld
@@ -102,7 +102,7 @@ tickClientHandler (ClientTick tickTime) = do
 
     if lastDeliveredOld /= V.fromList []
         then do
-            currLatency .= meanTickDifference lastDeliveredOld (round elapsedTicks)
+            currLatency .= (meanTickDifference lastDeliveredOld (round $ tickTime*10^6)) / 10^3
             -- currLatency .= elapsedTicks
             -- lastDelivered .= V.fromList []
         else return ()
@@ -327,7 +327,7 @@ master backend replicas crashCount time batchSize peers= do
   
   -- Terminate the slaves when the master terminates (this is optional)
   liftIO $ threadDelay (time*1000000)  -- seconds in microseconds
---   terminateAllSlaves backend
+  terminateAllSlaves backend
   terminate
 
 main :: IO ()

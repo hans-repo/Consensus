@@ -107,12 +107,12 @@ onPropose = do
     let bound1 :: Int
         bound1 = maxBound
     hash <- randomWithin (0, bound1)
-    ServerState cHeightOld _ _ dagRecentOld _ _ batchSize _ serverTickCount <- get
+    ServerState cHeightOld _ _ dagRecentOld _ timer batchSize _ serverTickCount <- get
     --addNMempool batchSize
     ServerState _ _ _ _ _ mempool _ _ _ <- get
     -- next view, reset timers for all peers
     ticksSinceSend .=0
-    mempoolBlock <- createBatch serverTickCount batchSize
+    mempoolBlock <- createBatch (round $ timer*10^6) batchSize
     let --parentsSingle = getBlocksFromHeight heightsMap cHeightOld
         --parentsHash = map blockHashS parentsSingle
         --parentsBlocks = map (\x -> findBlock x dagRecentOld) parentsHash

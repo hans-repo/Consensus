@@ -62,8 +62,8 @@ onPropose = do
     let bound1 :: Int
         bound1 = maxBound
     hash <- randomWithin (0, bound1)
-    ServerState _ cView bLock _ bLeafOld bRecentOld qcHigh _ _ batchSize _ serverTickCount _ <- get
-    mempoolBlock <- createBatch serverTickCount batchSize
+    ServerState _ cView bLock _ bLeafOld bRecentOld qcHigh _ _ batchSize timer serverTickCount _ <- get
+    mempoolBlock <- createBatch (round $ timer*10^6) batchSize
     let singleBlock = SingleBlock {contentS = mempoolBlock, qcS = qcHigh, heightS = cView + 1, blockHashS = BlockHash (show hash), parentS = [blockHashS bLeafOld]}
     bLeaf .= singleBlock
     bRecent .= appendIfNotExists singleBlock bRecentOld

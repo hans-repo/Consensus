@@ -58,11 +58,11 @@ commonSubset (x:xs) = foldl1 intersect (x:xs)
 onPropose :: ServerAction ()
 onPropose = do
     ServerConfig myPid peers _ _ _ _ <- ask
-    ServerState _ proposeListOld _ _ _ tick <- get
+    ServerState _ proposeListOld _ timer _ tick <- get
     let myList = map show [1, 2, 3, 4, 5, 6, 7, 8, 9, 10]
     x <- randomWithin (8, 9)  -- Randomly select between a and b elements
     dag <- selectRandomElements x myList
-    let proposal = DagInput {dag = dag, deliverTime = 0, proposeTime = tick}
+    let proposal = DagInput {dag = dag, deliverTime = 0, proposeTime = (round $ timer*10^6)}
     broadcastAll peers (ProposeMsg {proposal = proposal})
     phase .= "vote"
 
