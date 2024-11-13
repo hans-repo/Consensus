@@ -108,12 +108,12 @@ tickClientHandler (ClientTick tickTime) = do
         elapsedTicks = elapsedTime / fromIntegral timePerTick
     tickCount .= round elapsedTicks
 
-    -- if lastDeliveredOld /= V.fromList []
-    --     then do
-    --         currLatency .= meanTickDifference lastDeliveredOld tick
-    --         -- currLatency .= elapsedTicks
-    --         -- lastDelivered .= V.fromList []
-    --     else return ()
+    if lastDeliveredOld /= V.fromList []
+        then do
+            currLatency .= meanTickDifference lastDeliveredOld (round elapsedTicks)
+            -- currLatency .= elapsedTicks
+            -- lastDelivered .= V.fromList []
+        else return ()
     if V.length lastDeliveredOld > cmdRate
         then lastDelivered .= V.drop ((V.length lastDeliveredOld) - cmdRate*(length peers)) lastDeliveredOld
         else return ()
@@ -255,7 +255,7 @@ runClient config state = do
             match $ run msgHandlerCli,
             match $ run tickClientHandler]
     let throughput = fromIntegral (_deliveredCount state') / fromIntegral (_tickCount state') 
-        meanLatency = meanTickDifference (lastXElements ((_clientBatchSize state')*(length $ peers config)) (_lastDelivered state')) (_tickCount state')
+        -- meanLatency = meanTickDifference (lastXElements ((_clientBatchSize state')*(length $ peers config)) (_lastDelivered state')) (_tickCount state')
         -- meanLatency = meanTickDifference (_lastDelivered state') (_tickCount state')
         -- meanLatency = (_currLatency state')
     let throughputPrint 
@@ -263,7 +263,7 @@ runClient config state = do
             | ((_lastDelivered state') /= (_lastDelivered state)) && ((_lastDelivered state') /= V.empty)= say $ "Delivered commands " ++ show (_deliveredCount state')
             | otherwise = return ()
     let latencyPrint 
-            | ((_lastDelivered state') /= (_lastDelivered state)) && ((_lastDelivered state') /= V.empty) = say $ "Current mean latency: " ++ show meanLatency ++ "\n"
+            | ((_lastDelivered state') /= (_lastDelivered state)) && ((_lastDelivered state') /= V.empty) = say $ "Current mean latency: " ++ show (_currLatency state') ++ "\n"
             | otherwise = return ()
     let prints 
             | state' /= state = say $ "Current state: " ++ show state'++ "\n"
