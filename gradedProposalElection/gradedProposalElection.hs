@@ -108,12 +108,12 @@ tickClientHandler (ClientTick tickTime) = do
         elapsedTicks = elapsedTime / fromIntegral timePerTick
     tickCount += round elapsedTicks
 
-    if lastDeliveredOld /= V.fromList []
-        then do
-            currLatency .= meanTickDifference lastDeliveredOld tick
-            -- currLatency .= elapsedTicks
-            -- lastDelivered .= V.fromList []
-        else return ()
+    -- if lastDeliveredOld /= V.fromList []
+    --     then do
+    --         currLatency .= meanTickDifference lastDeliveredOld tick
+    --         -- currLatency .= elapsedTicks
+    --         -- lastDelivered .= V.fromList []
+    --     else return ()
     if V.length lastDeliveredOld > cmdRate
         then lastDelivered .= V.drop ((V.length lastDeliveredOld) - cmdRate*(length peers)) lastDeliveredOld
         else return ()
@@ -242,8 +242,8 @@ lastXElements x vec = V.take x (V.drop (V.length vec - x) vec)
 
 meanTickDifference :: V.Vector Command -> Int -> Double
 meanTickDifference commands tick =
-    -- let differences = map (\cmd -> fromIntegral (tick - proposeTime cmd)) (V.toList commands)
-    let differences = map (\cmd -> fromIntegral (deliverTime cmd - proposeTime cmd)) (V.toList commands)
+    let differences = map (\cmd -> fromIntegral (tick - proposeTime cmd)) (V.toList commands)
+    -- let differences = map (\cmd -> fromIntegral (deliverTime cmd - proposeTime cmd)) (V.toList commands)
         total = sum differences
         count = length differences
     in if count == 0 then 0 else total / fromIntegral count
@@ -255,7 +255,9 @@ runClient config state = do
             match $ run msgHandlerCli,
             match $ run tickClientHandler]
     let throughput = fromIntegral (_deliveredCount state') / fromIntegral (_tickCount state') 
-        meanLatency = meanTickDifference (lastXElements (_clientBatchSize state') (_lastDelivered state')) (_tickCount state')
+        meanLatency = meanTickDifference (lastXElements ((_clientBatchSize state')*(length $ peers config)) (_lastDelivered state')) (_tickCount state')
+        -- meanLatency = meanTickDifference (_lastDelivered state') (_tickCount state')
+        -- meanLatency = (_currLatency state')
     let throughputPrint 
             -- | ((_lastDelivered state') /= (_lastDelivered state)) && ((_lastDelivered state') /= V.empty) = say $ "Current throughput: " ++ show throughput ++ "\n" ++ "deliveredCount: " ++ show (_deliveredCount state') ++ "\n" ++ "tickCount: " ++ show (_tickCount state') ++ "\n" ++ "lastDelivered: " ++ show (V.toList $ _lastDelivered state') ++ "\n"
             | ((_lastDelivered state') /= (_lastDelivered state)) && ((_lastDelivered state') /= V.empty)= say $ "Delivered commands " ++ show (_deliveredCount state')
@@ -346,7 +348,7 @@ master backend replicas crashCount time batchSize peers= do
   
   -- Terminate the slaves when the master terminates (this is optional)
   liftIO $ threadDelay (time*1000000)  -- seconds in microseconds
---   terminateAllSlaves backend
+  terminateAllSlaves backend
   terminate
 
 main :: IO ()
