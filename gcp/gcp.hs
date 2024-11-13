@@ -50,10 +50,10 @@ tickServerHandler (ServerTick tickTime) = do
     ServerConfig myPid peers _ _ timePerTick _ <- ask
     ServerState phase proposeList voteList timerOld _ _<- get
     --increment ticks
-    timerPosix .= tickTime
+    -- timerPosix .= tickTime
     let elapsedTime = (tickTime - timerOld) *10^6
         elapsedTicks = elapsedTime / fromIntegral timePerTick
-    serverTickCount += round elapsedTicks
+    serverTickCount .= round elapsedTicks
 
     let quorum = 2 * div (length peers) 3 + 1
     let actionNextStep
@@ -84,10 +84,10 @@ tickClientHandler (ClientTick tickTime) = do
     ServerConfig myPid peers _ _ timePerTick _<- ask
     ClientState _ _ lastDeliveredOld lastHeight _ cmdRate timerOld tick <- get
 
-    timerPosixCli .= tickTime
+    -- timerPosixCli .= tickTime
     let elapsedTime = (tickTime - timerOld) *10^6
         elapsedTicks = elapsedTime / fromIntegral timePerTick
-    tickCount += round elapsedTicks
+    tickCount .= round elapsedTicks
 
     -- if lastDeliveredOld /= V.fromList []
     --     then do

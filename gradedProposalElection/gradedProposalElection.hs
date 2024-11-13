@@ -47,13 +47,13 @@ import Control.Distributed.Process (NodeId, kill,
 tickServerHandler :: ServerTick -> ServerAction ()
 tickServerHandler (ServerTick tickTime) = do
     ServerConfig myPid peers _ timeout timePerTick _ <- ask
-    ServerState cView _ _ bLeaf _ _ _ phase ticksSinceSendOld _ timerOld _ _<- get
+    ServerState cView _ _ bLeaf _ _ _ phase ticksSinceSendOld _ timerOld _ tickOld<- get
     --increment ticks
-    timerPosix .= tickTime
+    -- timerPosix .= tickTime
     let elapsedTime = (tickTime - timerOld) *10^6
         elapsedTicks = elapsedTime / fromIntegral timePerTick
-    ticksSinceSend += round elapsedTicks
-    serverTickCount += round elapsedTicks
+    ticksSinceSend += (round elapsedTicks)- tickOld
+    serverTickCount .= round elapsedTicks
     -- let leader = getLeader peers cView
     -- let actionLead
     -- -- propose if a quorum for the previous block is reached, or a quorum of new view messages, or if it is the first proposal (no previous quorum)
@@ -103,10 +103,10 @@ tickClientHandler :: ClientTick -> ClientAction ()
 tickClientHandler (ClientTick tickTime) = do
     ServerConfig myPid peers _ _ timePerTick _ <- ask
     ClientState _ _ lastDeliveredOld currLatencyOld _ cmdRate timeOld tick <- get
-    timerPosixCli .= tickTime
+    -- timerPosixCli .= tickTime
     let elapsedTime = (tickTime - timeOld) *10^6
         elapsedTicks = elapsedTime / fromIntegral timePerTick
-    tickCount += round elapsedTicks
+    tickCount .= round elapsedTicks
 
     -- if lastDeliveredOld /= V.fromList []
     --     then do
@@ -348,7 +348,7 @@ master backend replicas crashCount time batchSize peers= do
   
   -- Terminate the slaves when the master terminates (this is optional)
   liftIO $ threadDelay (time*1000000)  -- seconds in microseconds
-  terminateAllSlaves backend
+--  terminateAllSlaves backend
   terminate
 
 main :: IO ()

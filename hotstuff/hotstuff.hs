@@ -51,13 +51,14 @@ import ConsensusDataTypes
 tickServerHandler :: ServerTick -> ServerAction ()
 tickServerHandler (ServerTick tickTime) = do
     ServerConfig myPid peers _ timeout timePerTick _ <- ask
-    ServerState _ cView _ _ bLeaf _ _ voteList ticksSinceMsgOld _ timerOld _ _<- get
+    ServerState _ cView _ _ bLeaf _ _ voteList ticksSinceMsgOld _ timerOld tickOld _<- get
     --increment ticks
-    timerPosix .= tickTime
+    -- timerPosix .= tickTime
     let elapsedTime = (tickTime - timerOld) *10^6
         elapsedTicks = round (elapsedTime / fromIntegral timePerTick)
-    ticksSinceMsg .= Map.map (+elapsedTicks) ticksSinceMsgOld
-    serverTickCount += elapsedTicks
+        elapsedTicksSinceSend = elapsedTicks- tickOld
+    ticksSinceMsg .= Map.map (+elapsedTicksSinceSend) ticksSinceMsgOld
+    serverTickCount .= elapsedTicks
 
     let leader = getLeader peers cView
         quorum = 2 * div (length peers) 3 + 1
@@ -94,10 +95,10 @@ tickClientHandler :: ClientTick -> ClientAction ()
 tickClientHandler (ClientTick tickTime) = do
     ServerConfig myPid peers _ _ timePerTick _ <- ask
     ClientState _ _ lastDeliveredOld currLatencyOld _ cmdRate timeOld tick <- get
-    timerPosixCli .= tickTime
+    -- timerPosixCli .= tickTime
     let elapsedTime = (tickTime - timeOld) *10^6
         elapsedTicks = elapsedTime / fromIntegral timePerTick
-    tickCount += round elapsedTicks
+    tickCount .= round elapsedTicks
 
     -- if lastDeliveredOld /= V.fromList []
     --     then do

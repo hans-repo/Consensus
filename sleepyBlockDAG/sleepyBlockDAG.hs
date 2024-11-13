@@ -61,13 +61,14 @@ import Control.Distributed.Process.Closure
 tickServerHandler :: ServerTick -> ServerAction ()
 tickServerHandler (ServerTick tickTime) = do
     ServerConfig myPid peers _ timeout timePerTick _ <- ask
-    ServerState  _ _ _ _ ticksSinceSendOld timerOld _ _ _<- get
+    ServerState  _ _ _ _ ticksSinceSendOld timerOld _ _ tickOld<- get
     --increment ticks
-    timerPosix .= tickTime
+    -- timerPosix .= tickTime
     let elapsedTime = (tickTime - timerOld) *10^6
         elapsedTicks = elapsedTime / fromIntegral timePerTick
-    ticksSinceSend += round elapsedTicks
-    serverTickCount += round elapsedTicks
+    ticksSinceSend += (round elapsedTicks)- tickOld
+    serverTickCount .= round elapsedTicks
+
     let leader = myPid
     let actionLead
     -- propose if a quorum for the previous block is reached, or a quorum of new view messages, or if it is the first proposal (no previous quorum)
@@ -103,10 +104,10 @@ tickClientHandler :: ClientTick -> ClientAction ()
 tickClientHandler (ClientTick tickTime) = do
     ServerConfig myPid peers _ _ timePerTick _ <- ask
     ClientState _ _ lastDeliveredOld currLatencyOld _ cmdRate timerOld tick <- get
-    timerPosixCli .= tickTime
+    -- timerPosixCli .= tickTime
     let elapsedTime = (tickTime - timerOld) *10^6
         elapsedTicks = elapsedTime / fromIntegral timePerTick
-    tickCount += round elapsedTicks
+    tickCount .= round elapsedTicks
 
     -- if lastDeliveredOld /= V.fromList []
     --     then do
