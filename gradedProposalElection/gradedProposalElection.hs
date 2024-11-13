@@ -49,11 +49,11 @@ tickServerHandler (ServerTick tickTime) = do
     ServerConfig myPid peers _ timeout timePerTick _ <- ask
     ServerState cView _ _ bLeaf _ _ _ phase ticksSinceSendOld _ timerOld _ tickOld<- get
     --increment ticks
-    -- timerPosix .= tickTime
+    timerPosix .= tickTime
     let elapsedTime = (tickTime - timerOld) *10^6
         elapsedTicks = elapsedTime / fromIntegral timePerTick
-    ticksSinceSend += (round elapsedTicks)- tickOld
-    serverTickCount .= round elapsedTicks
+    ticksSinceSend += round elapsedTicks
+    serverTickCount += round elapsedTicks
     -- let leader = getLeader peers cView
     -- let actionLead
     -- -- propose if a quorum for the previous block is reached, or a quorum of new view messages, or if it is the first proposal (no previous quorum)
@@ -110,7 +110,7 @@ tickClientHandler (ClientTick tickTime) = do
 
     if lastDeliveredOld /= V.fromList []
         then do
-            currLatency .= meanTickDifference lastDeliveredOld (round elapsedTicks)
+            currLatency .= (meanTickDifference lastDeliveredOld (round $ tickTime*10^6)) / 10^6
             -- currLatency .= elapsedTicks
             -- lastDelivered .= V.fromList []
         else return ()
@@ -241,8 +241,8 @@ lastXElements x vec = V.take x (V.drop (V.length vec - x) vec)
 
 
 meanTickDifference :: V.Vector Command -> Int -> Double
-meanTickDifference commands tick =
-    let differences = map (\cmd -> fromIntegral (tick - proposeTime cmd)) (V.toList commands)
+meanTickDifference commands time =
+    let differences = map (\cmd -> fromIntegral (time - (proposeTime cmd))) (V.toList commands)
     -- let differences = map (\cmd -> fromIntegral (deliverTime cmd - proposeTime cmd)) (V.toList commands)
         total = sum differences
         count = length differences
@@ -270,7 +270,7 @@ runClient config state = do
             | otherwise = return ()
     throughputPrint
     latencyPrint
-    --prints
+    -- prints
     --say $ "Sending Messages : " ++ show outputMessages++ "\n"
     mapM (\msg -> send (recipientOf msg) msg) outputMessages
     let !state'' = state'
@@ -348,7 +348,7 @@ master backend replicas crashCount time batchSize peers= do
   
   -- Terminate the slaves when the master terminates (this is optional)
   liftIO $ threadDelay (time*1000000)  -- seconds in microseconds
---  terminateAllSlaves backend
+  terminateAllSlaves backend
   terminate
 
 main :: IO ()

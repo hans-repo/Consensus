@@ -112,13 +112,13 @@ onPropose = do
     let bound1 :: Int
         bound1 = maxBound
     hash <- randomWithin (0, bound1)
-    ServerState cView bLock _ bLeafOld _ _ _ _ _ batchSize _ _ serverTickCount<- get
+    ServerState cView bLock _ bLeafOld _ _ _ _ _ batchSize timer _ serverTickCount<- get
     let leader = getLeader peers cView
     if leader == myPid then do
         --addNMempool batchSize
         ServerState _ _ _ _ _ _ _ _ _ _ mempool _ _<- get
         --let mempoolBlock = map (setProposeTime serverTickCount) (take batchSize mempool)
-        mempoolBlock <- createBatch serverTickCount batchSize
+        mempoolBlock <- createBatch (round $ timer*10^6) batchSize
         --let block = Block {content = mempoolBlock, height = cView + 1, blockHash = BlockHash (show hash), parent = [bLeafOld]}
         let singleBlock = SingleBlock {contentS = mempoolBlock, heightS = cView + 1, blockHashS = BlockHash (show hash), parentS = [blockHashS bLeafOld]}
         -- bLeaf .= singleBlock
