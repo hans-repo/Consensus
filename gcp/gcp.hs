@@ -224,7 +224,7 @@ spawnServer batchSize clientPid = spawnLocal $ do
 
     serverPids <- expect
     say $ "received servers " ++ show serverPids
-    let tickTime = 1*10^3
+    let tickTime = 1*10^5
         timeoutMicroSeconds = 10*10^5
         timeoutTicks = timeoutMicroSeconds `div` tickTime
     say $ "synchronous delta timers set to " ++ show timeoutTicks ++ " ticks"
@@ -257,7 +257,7 @@ spawnClient batchSize nSlaves replicas crashCount = spawnLocal $ do
     mapM_ (`kill` "crash node") toCrashNodes
     say $ "sent crash command to " ++ show toCrashNodes
   
-    let tickTime = 1*10^3
+    let tickTime = 1*10^5
         timeoutMicroSeconds = 10*10^5
         timeoutTicks = timeoutMicroSeconds `div` tickTime
     spawnLocal $ forever $ do
