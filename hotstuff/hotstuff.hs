@@ -94,21 +94,22 @@ msgHandler (Message sender recipient (NewViewMsg qc view sign)) = do
 tickClientHandler :: ClientTick -> ClientAction ()
 tickClientHandler (ClientTick tickTime) = do
     ServerConfig myPid peers _ _ timePerTick _ <- ask
-    ClientState _ _ lastDeliveredOld currLatencyOld _ cmdRate timeOld tick <- get
+    ClientState _ _ lastDeliveredOld _ _ cmdRate timeOld tick <- get
     -- timerPosixCli .= tickTime
     let elapsedTime = (tickTime - timeOld) *10^6
         elapsedTicks = elapsedTime / fromIntegral timePerTick
     tickCount .= round elapsedTicks
-
-    if lastDeliveredOld /= V.fromList []
+    if V.length lastDeliveredOld > cmdRate
+        then lastDelivered .= V.drop ((V.length lastDeliveredOld) - cmdRate) lastDeliveredOld
+        else return ()
+    ClientState _ _ lastDeliveredNew _ _ _ _ _ <- get
+    if lastDeliveredNew /= V.fromList []
         then do
-            currLatency .= (meanTickDifference lastDeliveredOld (round $ tickTime*10^6)) / 10^3
+            currLatency .= (meanTickDifference lastDeliveredNew (round $ tickTime*10^6)) / 10^3
             -- currLatency .= elapsedTicks
             -- lastDelivered .= V.fromList []
         else return ()
-    if V.length lastDeliveredOld > 2*cmdRate*(length peers)
-        then lastDelivered .= V.drop ((V.length lastDeliveredOld) - cmdRate*(length peers)) lastDeliveredOld
-        else return ()
+
 
 -- sendNCommands :: Int -> Int -> [ProcessId] -> ClientAction ()
 -- sendNCommands 0 _ _ = return ()
