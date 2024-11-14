@@ -110,7 +110,8 @@ msgHandlerCli :: Message -> ClientAction ()
 msgHandlerCli (Message sender recipient (DeliverMsg deliverTick deliverCmd)) = do
     ClientState _ _ lastDeliveredOld lastHeight _ _ _ ticks<- get
     let deliverCmds = V.singleton deliverCmd
-    let newDelivered = elementsNotInLarger deliverCmds lastDeliveredOld
+    -- let newDelivered = elementsNotInLarger deliverCmds lastDeliveredOld
+    let newDelivered = deliverCmds
     let action
             -- | isSubset deliverCmds lastDeliveredOld = do lastDelivered .= lastDeliveredOld V.++ deliverCmds
             -- | otherwise = do deliveredCount += V.length deliverCmds
