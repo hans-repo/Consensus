@@ -295,7 +295,7 @@ master backend replicas crashCount time batchSize peers= do
   
   -- Terminate the slaves when the master terminates (this is optional)
   liftIO $ threadDelay (time*1000000)  -- seconds in microseconds
---   terminateAllSlaves backend
+  terminateAllSlaves backend
   terminate
 
 main :: IO ()

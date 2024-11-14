@@ -257,7 +257,7 @@ runClient config state = do
         -- meanLatency = meanTickDifference (lastXElements ((_clientBatchSize state')*(length $ peers config)) (_lastDelivered state')) (_tickCount state')
         -- meanLatency = meanTickDifference (lastXElements (_clientBatchSize state') (_lastDelivered state')) (_tickCount state')
     let throughputPrint 
-            -- | (_lastDelivered state') /= (_lastDelivered state) = say $ "Current throughput: " ++ show throughput ++ "\n" ++ "deliveredCount: " ++ show (_deliveredCount state') ++ "\n" ++ "tickCount: " ++ show (_tickCount state') ++ "\n" ++ "lastDelivered: " ++ show (V.toList $ _lastDelivered state') ++ "\n"
+            -- | (_lastDelivered state') /= (_lastDelivered state) = say $  "Delivered commands " ++ show (_deliveredCount state') ++ "\n" ++ "lastDelivered: " ++ show (V.toList $ _lastDelivered state') ++ "\n"
             | ((_lastDelivered state') /= (_lastDelivered state)) && ((_lastDelivered state') /= V.empty) = say $ "Delivered commands " ++ show (_deliveredCount state') ++ "\n" 
             | otherwise = return ()
     let latencyPrint 
@@ -272,7 +272,8 @@ runClient config state = do
     --prints
     -- say $ "client timer: " ++ show (_timerPosix state')
     --say $ "Sending Messages : " ++ show outputMessages++ "\n"
-    --say $ "Size of lastDelivered : " ++ show (V.length $ _lastDelivered state) ++ "\n"
+    -- say $ "Size of lastDelivered : " ++ show (V.length $ _lastDelivered state') ++ "\n"
+    -- say $ "lastDelivered : " ++ show (_lastDelivered state') ++ "\n"
     mapM (\msg -> send (recipientOf msg) msg) outputMessages
     let !state'' = state'
     runClient config state''
@@ -352,7 +353,7 @@ master backend replicas crashCount time batchSize peers= do
   
   -- Terminate the slaves when the master terminates (this is optional)
   liftIO $ threadDelay (time*1000000)  -- seconds in microseconds
---   terminateAllSlaves backend
+  terminateAllSlaves backend
   terminate
 
 main :: IO ()
