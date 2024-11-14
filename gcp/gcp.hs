@@ -127,8 +127,7 @@ msgHandlerCli (Message sender recipient (DeliverMsg deliverTick deliverCmd)) = d
 elementsNotInLarger :: V.Vector DagInput -> V.Vector DagInput -> V.Vector DagInput
 elementsNotInLarger smaller larger = V.filter notInLargerFn smaller
     where
-        largerIds = V.map dag larger  -- Extract dag from the larger vector
-        notInLargerFn cmd = dag cmd `V.notElem` largerIds  -- Check if dag is not in largerIds
+        notInLargerFn cmd = cmd `V.notElem` larger  -- Check if dag is not in largerIds
 
 
 isSubset :: V.Vector DagInput -> V.Vector DagInput -> Bool
