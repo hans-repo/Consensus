@@ -112,7 +112,7 @@ tickClientHandler (ClientTick tickTime) = do
             -- let truncLastDelivered = V.drop ((V.length lastDeliveredOld) - cmdRate) lastDeliveredOld
             let truncLastDelivered = lastXElements cmdRate lastDeliveredOld
             lastDelivered .= truncLastDelivered
-            currLatency .= (meanTickDifference lastDeliveredOld (round $ tickTime*10^6)) / 10^6
+            currLatency .= (meanTickDifference truncLastDelivered (round $ tickTime*10^6)) / 10^6
         else do
             let truncLastDelivered = lastDeliveredOld
             -- currLatency .= (meanTickDifference truncLastDelivered (round $ tickTime*10^6)) / 10^6
@@ -265,8 +265,8 @@ runClient :: ServerConfig -> ClientState -> Process ()
 runClient config state = do
     let run handler msg = return $ execRWS (runClientAction $ handler msg) config state
     (state', outputMessages) <- receiveWait [
-            match $ run msgHandlerCli,
-            match $ run tickClientHandler]
+            match $ run tickClientHandler,
+            match $ run msgHandlerCli]
     let throughput = fromIntegral (_deliveredCount state') / fromIntegral (_tickCount state') 
         -- meanLatency = meanTickDifference (lastXElements ((_clientBatchSize state')*(length $ peers config)) (_lastDelivered state')) (_tickCount state')
         -- meanLatency = meanTickDifference (_lastDelivered state') (_tickCount state')

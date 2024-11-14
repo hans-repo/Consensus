@@ -202,8 +202,8 @@ runClient :: ServerConfig -> ClientState -> Process ()
 runClient config state = do
     let run handler msg = return $ execRWS (runClientAction $ handler msg) config state
     (state', outputMessages) <- receiveWait [
-            match $ run msgHandlerCli,
-            match $ run tickClientHandler]
+            match $ run tickClientHandler,
+            match $ run msgHandlerCli]
     let throughput = fromIntegral (_deliveredCount state') / fromIntegral (_tickCount state') 
         -- meanLatency = meanTickDifference (lastXElements ((_clientBatchSize state')*(length $ peers config)) (_lastDelivered state')) (_tickCount state')
     let throughputPrint 
