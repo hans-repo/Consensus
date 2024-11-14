@@ -148,8 +148,8 @@ msgHandlerCli (Message sender recipient (DeliverMsg deliverH deliverCmds)) = do
             -- | isSubset deliverCmds lastDeliveredOld = do lastDelivered .= lastDeliveredOld V.++ deliverCmds
             -- | otherwise = do deliveredCount += V.length deliverCmds
             --                  lastDelivered .= lastDeliveredOld V.++ deliverCmds
-            | length newDelivered > 0 = do lastDelivered .= lastDeliveredOld V.++ newDelivered
-                                           deliveredCount += V.length deliverCmds
+            | length newDelivered > 0 = do lastDelivered .= lastDeliveredOld V.++ deliverCmds
+                                           deliveredCount += V.length newDelivered
             | otherwise = do lastDelivered .= lastDeliveredOld V.++ deliverCmds
     action
 
