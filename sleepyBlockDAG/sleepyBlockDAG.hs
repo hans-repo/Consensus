@@ -109,14 +109,17 @@ tickClientHandler (ClientTick tickTime) = do
         elapsedTicks = elapsedTime / fromIntegral timePerTick
     tickCount .= round elapsedTicks
 
-    if lastDeliveredOld /= V.fromList []
-        then do
-            currLatency .= (meanTickDifference lastDeliveredOld (round $ tickTime*10^6)) / 10^6
-            -- currLatency .= elapsedTicks
-            -- lastDelivered .= V.fromList []
-        else return ()
-    if V.length lastDeliveredOld > 10*cmdRate*(length peers)
-        then lastDelivered .= V.drop ((V.length lastDeliveredOld) - cmdRate*(length peers)) lastDeliveredOld
+    -- if lastDeliveredOld /= V.fromList []
+    --     then do
+    --         currLatency .= (meanTickDifference lastDeliveredOld (round $ tickTime*10^6)) / 10^6
+    --         -- currLatency .= elapsedTicks
+    --         -- lastDelivered .= V.fromList []
+    --     else return ()
+    if V.length lastDeliveredOld > cmdRate*(length peers)
+        then do 
+            let truncLastDelivered = lastXElements cmdRate lastDeliveredOld
+            lastDelivered .= V.drop ((V.length lastDeliveredOld) - cmdRate*(length peers)) lastDeliveredOld
+            currLatency .= (meanTickDifference truncLastDelivered (round $ tickTime*10^6)) / 10^6
         else return ()
 
 meanTickDifference :: V.Vector Command -> Int -> Double
@@ -270,6 +273,7 @@ runClient config state = do
     throughputPrint
     latencyPrint
     --prints
+    -- say $ "buffer size: " ++ show ((length (peers config))*(_clientBatchSize state'))
     -- say $ "client timer: " ++ show (_timerPosix state')
     --say $ "Sending Messages : " ++ show outputMessages++ "\n"
     -- say $ "Size of lastDelivered : " ++ show (V.length $ _lastDelivered state') ++ "\n"
