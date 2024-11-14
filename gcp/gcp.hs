@@ -102,13 +102,26 @@ tickClientHandler (ClientTick tickTime) = do
 
 msgHandlerCli :: Message -> ClientAction ()
 --record delivered commands
-msgHandlerCli (Message sender recipient (DeliverMsg deliverTick deliverCmds)) = do
+msgHandlerCli (Message sender recipient (DeliverMsg deliverTick deliverCmd)) = do
     ClientState _ _ lastDeliveredOld lastHeight _ _ _ ticks<- get
+    let deliverCmds = V.singleton deliverCmd
+    let newDelivered = elementsNotInLarger deliverCmds lastDeliveredOld
     let action
-            | not $ isSubset (V.fromList [deliverCmds]) lastDeliveredOld = do deliveredCount += 1
-                                                                              lastDelivered .= lastDeliveredOld V.++ (V.fromList [deliverCmds])
-            | otherwise = lastDelivered .= lastDeliveredOld V.++ (V.fromList [deliverCmds])
+            -- | isSubset deliverCmds lastDeliveredOld = do lastDelivered .= lastDeliveredOld V.++ deliverCmds
+            -- | otherwise = do deliveredCount += V.length deliverCmds
+            --                  lastDelivered .= lastDeliveredOld V.++ deliverCmds
+            | length newDelivered > 0 = do lastDelivered .= lastDeliveredOld V.++ newDelivered
+                                           deliveredCount += V.length deliverCmds
+            | otherwise = do lastDelivered .= lastDeliveredOld V.++ deliverCmds
     action
+
+-- Function to get the elements in 'smaller' that are not in 'larger'
+elementsNotInLarger :: V.Vector DagInput -> V.Vector DagInput -> V.Vector DagInput
+elementsNotInLarger smaller larger = V.filter notInLargerFn smaller
+    where
+        largerIds = V.map dag larger  -- Extract dag from the larger vector
+        notInLargerFn cmd = dag cmd `V.notElem` largerIds  -- Check if dag is not in largerIds
+
 
 isSubset :: V.Vector DagInput -> V.Vector DagInput -> Bool
 isSubset smaller larger = V.all (`V.elem` largerIds) smallerIds

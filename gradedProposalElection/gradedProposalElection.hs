@@ -143,18 +143,23 @@ msgHandlerCli :: Message -> ClientAction ()
 --record delivered commands
 msgHandlerCli (Message sender recipient (DeliverMsg deliverH deliverCmds)) = do
     ClientState _ _ lastDeliveredOld _ _ _ _ _<- get
+    let newDelivered = elementsNotInLarger deliverCmds lastDeliveredOld
     let action
-            -- | lastHeight < deliverH = do rHeight += 1
-            --                              deliveredCount += V.length deliverCmds
-            --                              lastDelivered .= deliverCmds
-            -- | lastHeight == deliverH && lastDeliveredOld /= deliverCmds = do 
-            --                                                                 deliveredCount += V.length deliverCmds
-            --                                                                 lastDelivered .= deliverCmds
-            -- | otherwise = return ()
-            | not $ isSubset deliverCmds lastDeliveredOld = do deliveredCount += V.length deliverCmds
-                                                               lastDelivered .= lastDeliveredOld V.++ deliverCmds
-            | otherwise = lastDelivered .= lastDeliveredOld V.++ deliverCmds
+            -- | isSubset deliverCmds lastDeliveredOld = do lastDelivered .= lastDeliveredOld V.++ deliverCmds
+            -- | otherwise = do deliveredCount += V.length deliverCmds
+            --                  lastDelivered .= lastDeliveredOld V.++ deliverCmds
+            | length newDelivered > 0 = do lastDelivered .= lastDeliveredOld V.++ newDelivered
+                                           deliveredCount += V.length deliverCmds
+            | otherwise = do lastDelivered .= lastDeliveredOld V.++ deliverCmds
     action
+
+-- Function to get the elements in 'smaller' that are not in 'larger'
+elementsNotInLarger :: V.Vector Command -> V.Vector Command -> V.Vector Command
+elementsNotInLarger smaller larger = V.filter notInLargerFn smaller
+    where
+        largerIds = V.map cmdId larger  -- Extract cmdIds from the larger vector
+        notInLargerFn cmd = cmdId cmd `V.notElem` largerIds  -- Check if cmdId is not in largerIds
+
 
 isSubset :: V.Vector Command -> V.Vector Command -> Bool
 isSubset smaller larger = V.all (`V.elem` largerIds) smallerIds
