@@ -92,7 +92,8 @@ tickClientHandler (ClientTick tickTime) = do
         then do 
             -- let truncLastDelivered = V.drop ((V.length lastDeliveredOld) - cmdRate) lastDeliveredOld
             let truncLastDelivered = lastXElements cmdRate lastDeliveredOld
-            lastDelivered .= truncLastDelivered
+            -- lastDelivered .= truncLastDelivered
+            lastDelivered .= V.drop ((V.length lastDeliveredOld) - cmdRate*(length peers)) lastDeliveredOld
             currLatency .= (meanTickDifference truncLastDelivered (round $ tickTime*10^6)) / 10^3
         else do
             -- let truncLastDelivered = lastDeliveredOld
@@ -127,7 +128,8 @@ msgHandlerCli (Message sender recipient (DeliverMsg deliverTick deliverCmd)) = d
 elementsNotInLarger :: V.Vector DagInput -> V.Vector DagInput -> V.Vector DagInput
 elementsNotInLarger smaller larger = V.filter notInLargerFn smaller
     where
-        notInLargerFn cmd = cmd `V.notElem` larger  -- Check if dag is not in largerIds
+        largerIds = V.map dag larger  -- Extract dag from the larger vector
+        notInLargerFn cmd = dag cmd `V.notElem` largerIds  -- Check if dag is not in largerIds
 
 
 isSubset :: V.Vector DagInput -> V.Vector DagInput -> Bool
