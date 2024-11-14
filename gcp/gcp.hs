@@ -89,16 +89,19 @@ tickClientHandler (ClientTick tickTime) = do
         elapsedTicks = elapsedTime / fromIntegral timePerTick
     tickCount .= round elapsedTicks
     if V.length lastDeliveredOld > cmdRate
-        then lastDelivered .= V.drop ((V.length lastDeliveredOld) - cmdRate) lastDeliveredOld
-        else return ()
-    ClientState _ _ lastDeliveredNew _ _ _ _ _ <- get
-    if lastDeliveredNew /= V.fromList []
-        then do
-            currLatency .= (meanTickDifference lastDeliveredNew (round $ tickTime*10^6)) / 10^3
-            -- currLatency .= elapsedTicks
-            -- lastDelivered .= V.fromList []
-        else return ()
-
+        then do 
+            let truncLastDelivered = V.drop ((V.length lastDeliveredOld) - cmdRate) lastDeliveredOld
+            lastDelivered .= truncLastDelivered
+            currLatency .= (meanTickDifference truncLastDelivered (round $ tickTime*10^6)) / 10^6
+        else do
+            let truncLastDelivered = lastDeliveredOld
+            currLatency .= (meanTickDifference truncLastDelivered (round $ tickTime*10^6)) / 10^6
+    -- if truncLastDelivered /= V.fromList []
+    --     then do
+            
+    --         -- currLatency .= elapsedTicks
+    --         -- lastDelivered .= V.fromList []
+    --     else return ()
 
 
 msgHandlerCli :: Message -> ClientAction ()
