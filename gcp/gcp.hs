@@ -88,23 +88,13 @@ tickClientHandler (ClientTick tickTime) = do
     let elapsedTime = (tickTime - timerOld) *10^6
         elapsedTicks = elapsedTime / fromIntegral timePerTick
     tickCount .= round elapsedTicks
-    if V.length lastDeliveredOld > cmdRate
+    if V.length lastDeliveredOld > 1
         then do 
-            -- let truncLastDelivered = V.drop ((V.length lastDeliveredOld) - cmdRate) lastDeliveredOld
-            let truncLastDelivered = lastXElements cmdRate lastDeliveredOld
+            let truncLastDelivered = V.singleton $ V.last lastDeliveredOld
             lastDelivered .= truncLastDelivered
-            -- lastDelivered .= V.drop ((V.length lastDeliveredOld) - cmdRate*(length peers)) lastDeliveredOld
             currLatency .= (meanTickDifference truncLastDelivered (round $ tickTime*10^6)) / 10^3
         else do
-            -- let truncLastDelivered = lastDeliveredOld
-            -- currLatency .= (meanTickDifference truncLastDelivered (round $ tickTime*10^6)) / 10^3
             return ()
-    -- if truncLastDelivered /= V.fromList []
-    --     then do
-            
-    --         -- currLatency .= elapsedTicks
-    --         -- lastDelivered .= V.fromList []
-    --     else return ()
 
 
 msgHandlerCli :: Message -> ClientAction ()
@@ -112,8 +102,8 @@ msgHandlerCli :: Message -> ClientAction ()
 msgHandlerCli (Message sender recipient (DeliverMsg deliverTick deliverCmd)) = do
     ClientState _ _ lastDeliveredOld lastHeight _ _ _ ticks<- get
     let deliverCmds = V.singleton deliverCmd
-    let newDelivered = elementsNotInLarger deliverCmds lastDeliveredOld
-    -- let newDelivered = deliverCmds
+    -- let newDelivered = elementsNotInLarger deliverCmds lastDeliveredOld
+    let newDelivered = deliverCmds
     let action
             -- | isSubset deliverCmds lastDeliveredOld = do lastDelivered .= lastDeliveredOld V.++ deliverCmds
             -- | otherwise = do deliveredCount += V.length deliverCmds
