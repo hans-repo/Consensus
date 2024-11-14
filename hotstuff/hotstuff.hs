@@ -106,8 +106,9 @@ tickClientHandler (ClientTick tickTime) = do
             lastDelivered .= truncLastDelivered
             currLatency .= (meanTickDifference truncLastDelivered (round $ tickTime*10^6)) / 10^3
         else do
-            let truncLastDelivered = lastDeliveredOld
-            currLatency .= (meanTickDifference truncLastDelivered (round $ tickTime*10^6)) / 10^3
+            -- let truncLastDelivered = lastDeliveredOld
+            -- currLatency .= (meanTickDifference truncLastDelivered (round $ tickTime*10^6)) / 10^3
+            return ()
     -- if truncLastDelivered /= V.fromList []
     --     then do
             
