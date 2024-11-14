@@ -115,9 +115,9 @@ tickClientHandler (ClientTick tickTime) = do
             -- currLatency .= elapsedTicks
             -- lastDelivered .= V.fromList []
         else return ()
-    -- if V.length lastDeliveredOld > 2*cmdRate*(length peers)
-    --     then lastDelivered .= V.drop ((V.length lastDeliveredOld) - cmdRate*(length peers)) lastDeliveredOld
-    --     else return ()
+    if V.length lastDeliveredOld > 2*cmdRate*(length peers)
+        then lastDelivered .= V.drop ((V.length lastDeliveredOld) - cmdRate*(length peers)) lastDeliveredOld
+        else return ()
 
 meanTickDifference :: V.Vector Command -> Int -> Double
 meanTickDifference commands time =
@@ -166,7 +166,8 @@ msgHandlerCli (Message sender recipient (DeliverMsg deliverH deliverCmds)) = do
             --                  lastDelivered .= lastDeliveredOld V.++ deliverCmds
             | length newDelivered > 0 = do lastDelivered .= lastDeliveredOld V.++ deliverCmds
                                            deliveredCount += V.length newDelivered
-            | otherwise = do lastDelivered .= lastDeliveredOld V.++ deliverCmds
+            -- | otherwise = do lastDelivered .= lastDeliveredOld V.++ deliverCmds
+            | otherwise = return ()
     action
 
 -- Function to get the elements in 'smaller' that are not in 'larger'
