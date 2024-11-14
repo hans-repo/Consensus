@@ -104,10 +104,10 @@ tickClientHandler (ClientTick tickTime) = do
             -- let truncLastDelivered = V.drop ((V.length lastDeliveredOld) - cmdRate) lastDeliveredOld
             let truncLastDelivered = lastXElements cmdRate lastDeliveredOld
             lastDelivered .= truncLastDelivered
-            currLatency .= (meanTickDifference truncLastDelivered (round $ tickTime*10^6)) / 10^6
+            currLatency .= (meanTickDifference truncLastDelivered (round $ tickTime*10^6)) / 10^3
         else do
             let truncLastDelivered = lastDeliveredOld
-            currLatency .= (meanTickDifference truncLastDelivered (round $ tickTime*10^6)) / 10^6
+            currLatency .= (meanTickDifference truncLastDelivered (round $ tickTime*10^6)) / 10^3
     -- if truncLastDelivered /= V.fromList []
     --     then do
             
