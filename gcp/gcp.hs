@@ -92,8 +92,8 @@ tickClientHandler (ClientTick tickTime) = do
         then do 
             -- let truncLastDelivered = V.drop ((V.length lastDeliveredOld) - cmdRate) lastDeliveredOld
             let truncLastDelivered = lastXElements cmdRate lastDeliveredOld
-            -- lastDelivered .= truncLastDelivered
-            lastDelivered .= V.drop ((V.length lastDeliveredOld) - cmdRate*(length peers)) lastDeliveredOld
+            lastDelivered .= truncLastDelivered
+            -- lastDelivered .= V.drop ((V.length lastDeliveredOld) - cmdRate*(length peers)) lastDeliveredOld
             currLatency .= (meanTickDifference truncLastDelivered (round $ tickTime*10^6)) / 10^3
         else do
             -- let truncLastDelivered = lastDeliveredOld
@@ -112,16 +112,15 @@ msgHandlerCli :: Message -> ClientAction ()
 msgHandlerCli (Message sender recipient (DeliverMsg deliverTick deliverCmd)) = do
     ClientState _ _ lastDeliveredOld lastHeight _ _ _ ticks<- get
     let deliverCmds = V.singleton deliverCmd
-    let newDelivered = elementsNotInLarger deliverCmds lastDeliveredOld
-    -- let newDelivered = deliverCmds
+    -- let newDelivered = elementsNotInLarger deliverCmds lastDeliveredOld
     let action
-            -- | isSubset deliverCmds lastDeliveredOld = do lastDelivered .= lastDeliveredOld V.++ deliverCmds
-            -- | otherwise = do deliveredCount += V.length deliverCmds
-            --                  lastDelivered .= lastDeliveredOld V.++ deliverCmds
-            | length newDelivered > 0 = do lastDelivered .= lastDeliveredOld V.++ deliverCmds
-                                           deliveredCount += V.length newDelivered
-            -- | otherwise = do lastDelivered .= lastDeliveredOld V.++ deliverCmds
-            | otherwise = return ()
+            | isSubset deliverCmds lastDeliveredOld = do lastDelivered .= lastDeliveredOld V.++ deliverCmds
+            | otherwise = do deliveredCount += V.length deliverCmds
+                             lastDelivered .= lastDeliveredOld V.++ deliverCmds
+            -- | length newDelivered > 0 = do lastDelivered .= lastDeliveredOld V.++ deliverCmds
+            --                                deliveredCount += V.length newDelivered
+            -- -- | otherwise = do lastDelivered .= lastDeliveredOld V.++ deliverCmds
+            -- | otherwise = return ()
     action
 
 -- Function to get the elements in 'smaller' that are not in 'larger'
