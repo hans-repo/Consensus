@@ -115,9 +115,9 @@ tickClientHandler (ClientTick tickTime) = do
             -- currLatency .= elapsedTicks
             -- lastDelivered .= V.fromList []
         else return ()
-    if V.length lastDeliveredOld > 2*cmdRate*(length peers)
-        then lastDelivered .= V.drop ((V.length lastDeliveredOld) - cmdRate*(length peers)) lastDeliveredOld
-        else return ()
+    -- if V.length lastDeliveredOld > 2*cmdRate*(length peers)
+    --     then lastDelivered .= V.drop ((V.length lastDeliveredOld) - cmdRate*(length peers)) lastDeliveredOld
+    --     else return ()
 
 meanTickDifference :: V.Vector Command -> Int -> Double
 meanTickDifference commands time =
