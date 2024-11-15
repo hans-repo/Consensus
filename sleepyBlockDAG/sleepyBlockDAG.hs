@@ -115,7 +115,7 @@ tickClientHandler (ClientTick tickTime) = do
     --         -- currLatency .= elapsedTicks
     --         -- lastDelivered .= V.fromList []
     --     else return ()
-    if V.length lastDeliveredOld > 2*cmdRate*(length peers)
+    if V.length lastDeliveredOld > 10*cmdRate*(length peers)
         then do 
             let truncLastDelivered = lastXElements cmdRate lastDeliveredOld
             lastDelivered .= V.drop ((V.length lastDeliveredOld) - cmdRate*(length peers)) lastDeliveredOld
