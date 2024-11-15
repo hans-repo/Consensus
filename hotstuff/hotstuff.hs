@@ -56,8 +56,9 @@ tickServerHandler (ServerTick tickTime) = do
     timerPosix .= tickTime
     let elapsedTime = (tickTime - timerOld) *10^6
         elapsedTicks = round (elapsedTime / fromIntegral timePerTick)
-        elapsedTicksSinceSend = elapsedTicks- tickOld
-    ticksSinceMsg .= Map.map (+elapsedTicksSinceSend) ticksSinceMsgOld
+        elapsedTicksSinceSend = max (elapsedTicks- tickOld) 1
+    let ticksSinceMsgNew = Map.map (+elapsedTicksSinceSend) ticksSinceMsgOld
+    ticksSinceMsg .= ticksSinceMsgNew
     serverTickCount .= elapsedTicks
 
     let leader = getLeader peers cView
@@ -70,7 +71,7 @@ tickServerHandler (ServerTick tickTime) = do
             | otherwise = return ()
     actionLead
     let actionNewView 
-            | Map.findWithDefault 0 leader ticksSinceMsgOld > timeout = onNextSyncView
+            | Map.findWithDefault 0 leader ticksSinceMsgNew > timeout = onNextSyncView
             | otherwise = return ()
     actionNewView
 
@@ -215,7 +216,7 @@ runServer config state = do
                           say $ show (getSizeInBytes $ outputMessages) ++ "\n"
                           --say $ "Size of mempool : " ++ show (getSizeInBytes $ _mempool state' ) ++ "\n"
                           --say $ "Length of mempool : " ++ show (length $ _mempool state' ) ++ "\n"
-                          
+    -- say $ "tick since send: " ++ show (_ticksSinceMsg state') ++ "\n"  
     -- memoryPrints
     -- liftIO $ threadDelay (1000)
     mapM (\msg -> sendWithDelay latency (recipientOf msg) msg) outputMessages
