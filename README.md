@@ -42,7 +42,7 @@ Build all, or select specific algorithm to build.
 ```
 cabal v2-build all
 ```
-Run, here dynamic-dag
+Run, here sleepyBlockDAG
 ```
-cabal v2-run dynamic-dag
+cabal v2-run sleepyBlockDAG
 ```
