@@ -8,10 +8,10 @@ This repository contains implementations of several distributed consensus algori
 
 The following consensus protocols are implemented:
 
-- **sleepyBlockDAG**: A directed acyclic graph (DAG) based consensus mechanism
+- **sleepyBlockDAG**: Common case directed acyclic graph (DAG) based consensus mechanism
 - **Hotstuff**: A leader-based Byzantine Fault Tolerant (BFT) consensus protocol with linear communication complexity
-- **Graded Proposal Election**: A multi-phase consensus protocol using graded consensus
-- **GCP (Graded Consensus Protocol)**: A consensus protocol based on graded agreement
+- **Graded Proposal Election**: Common case multi-phase consensus protocol using graded consensus
+- **GCP (Graded Common Prefix)**: A graded common prefix implementation
 
 ## Repository Structure
 The repository is organized into separate directories for each consensus protocol implementation:
@@ -40,7 +40,8 @@ Each protocol implementation consists of:
 
 ### sleepyBlockDAG
 
-A directed acyclic graph (DAG) based consensus protocol that allows for higher throughput by organizing blocks in a DAG structure rather than a linear chain. Nodes propose blocks that reference multiple parent blocks, allowing for parallel block creation.
+A directed acyclic graph (DAG) based consensus protocol with dynamic availability that allows for higher throughput by organizing blocks in a DAG structure rather than a linear chain. Nodes propose blocks that reference multiple parent blocks, allowing for parallel block creation.
+Published in S&P 2025 and available online: https://eprint.iacr.org/2025/067.pdf
 
 ### Hotstuff
 
@@ -49,6 +50,7 @@ A state-of-the-art BFT consensus protocol designed for blockchain systems with t
 - Three-phase commit process (prepare, pre-commit, commit)
 - Leader-based block proposal
 - View synchronization for leader rotation
+Published in PODC 2019 and available online: https://dl.acm.org/doi/pdf/10.1145/3293611.3331591
 
 ### Graded Proposal Election
 
@@ -58,10 +60,11 @@ A multi-phase consensus protocol using graded agreement with the following phase
 3. Tally phase
 4. Vote phase
 5. Decision phase
+Published in CCS 2023 and available online: https://dl.acm.org/doi/pdf/10.1145/3576915.3623073
+### GCP (Graded Common Prefix)
 
-### GCP (Graded Consensus Protocol)
-
-A consensus protocol based on graded agreement concepts with a simplified design compared to the full graded proposal election.
+A graded common prefix implementation, lighter than standard consensus.
+Published in Published in S&P 2025 and available online: https://eprint.iacr.org/2025/067.pdf
 
 ## Getting Started
 
