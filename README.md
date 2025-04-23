@@ -14,7 +14,6 @@ The following consensus protocols are implemented:
 - **GCP (Graded Consensus Protocol)**: A consensus protocol based on graded agreement
 
 ## Repository Structure
-file:///home/asahi/Documents/Hans Dynamic DAG Meta-review.zip
 The repository is organized into separate directories for each consensus protocol implementation:
 
 ```
@@ -124,6 +123,7 @@ Available options for each protocol include:
 ## Distributed Execution
 
 The protocols can be run in a distributed manner using the master/slave setup:
+Master/slave nodes behave identically as nodes in the chosen protocol. The master/slave distinction is used to control the experiment parameters from the master node.
 
 1. Start slave nodes on different machines:
 ```bash
